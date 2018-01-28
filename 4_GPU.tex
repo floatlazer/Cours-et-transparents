@@ -1,0 +1,939 @@
+\documentclass{beamer}
+\usepackage{tikz}
+\usetikzlibrary{patterns}
+\usetikzlibrary{shadows}
+%\usetikzlibrary{trees}
+\usepgflibrary{shapes.arrows}
+\usetikzlibrary{arrows}
+\usetikzlibrary{shapes}
+\usetikzlibrary{decorations.pathmorphing}
+%\usepackage{tkz-euclide}
+\usepackage{amsmath, amssymb}
+\usepackage[utf8x]{inputenc}
+\usepackage{colortbl}
+\usepackage[french]{babel}
+\usepackage{listings}
+\usepackage{times}
+\usepackage{xcolor}
+\usepackage{fp}
+\usepackage{algorithmic}
+%\makeatletter
+
+\newcommand{\R}{\mathbb{R}}
+%\newcommand{\C}{\mathbb{C}}
+
+\definecolor{royalblue}{rgb}{0.3,0.5,0.9}
+\definecolor{lightblue}{rgb}{0.7,0.7,1.0}
+\definecolor{navyblue}{rgb}{0.1,0.2,0.7}
+\definecolor{Maroon}{rgb}{0.5,0.5,0.1}
+
+\title{Programming GPGPU}
+\author[Juvigny]{Xavier Juvigny}
+\institute{ONERA/CHP}
+\date[C2013]{March 2013}
+\subject{GPGPU}
+
+%\pgfdeclareimage[interpolate=true,width=2cm,height=0.5cm]{logoEsilv}{esilv}
+\pgfdeclareimage[interpolate=true,width=.45\textwidth]{cudavisu1}{CudaVisual1}
+\pgfdeclareimage[interpolate=true,width=.45\textwidth]{cudavisu2}{CudaVisual2}
+
+\lstloadlanguages{[ISO]C++,Python,[90]Fortran}
+\lstset{
+    language=C++
+  , frame=single
+  , basicstyle=\scriptsize
+  , keywordstyle=\color{blue}\bfseries
+  , commentstyle=\color{red}
+  , stringstyle=\color{magenta}\ttfamily
+  , backgroundcolor=\color{verylightgray}
+}
+
+%\usetheme{Onera2007}
+\setbeamercovered{invisible} 
+\setbeamertemplate{navigation symbols}{}
+
+\definecolor{green!50!black}{rgb}{0.3,0.5,0.9}
+\definecolor{navyblue}{rgb}{0.1,0.2,0.7}
+\definecolor{darkgreen}{rgb}{0. 0.2 0}
+\definecolor{darkred}{rgb}{0.4 0 0}
+\definecolor{green!50!black}{rgb}{0.2 0. 0.2}
+\definecolor{lightgreen!50!black}{rgb}{0.4 0. 0.4}
+\definecolor{midblue}{rgb}{0. 0.2 0.4}
+\definecolor{verylightgray}{rgb}{0.95 0.95 1.0}
+\definecolor{lightyellow}{rgb}{1.0 0.95 0.75}
+
+% Compteurs pour certaines images
+\newcounter{gp}
+\newcounter{lp}
+
+
+\lstloadlanguages{[ISO]C++,Python,[90]Fortran}
+\lstset{
+    language=C++
+  , frame=single
+  , basicstyle=\scriptsize
+  , keywordstyle=\color{blue}\bfseries
+  , commentstyle=\color{red}
+  , stringstyle=\color{magenta}\ttfamily
+  , backgroundcolor=\color{verylightgray}
+}
+
+\begin{document}
+\frame[plain]{\maketitle}
+
+\section{GPGPU architecture nVIDIA/ATI}
+
+\subsection{CPU--GPU overview}
+
+\begin{frame}{CPU--GPU overview}
+
+\begin{itemize}
+\item The CPU uses the GPGPU as a computing coprocessor for some computations
+  as a SIMD computing device for some well adapted algorithms.
+\item CPU and GPGPU are both multi--cores devices and have hierarchical memory
+architecture.
+\end{itemize}
+
+\begin{center}
+\begin{tikzpicture}
+\draw (-4,-2) rectangle (-1,2) (1,-2) rectangle (5,2);
+\draw[fill=cyan] (-3.75,-0.5) rectangle (-1.25,1.75)
+                 ( 1.25,-0.5) rectangle ( 4.75,1.75) ;
+\node[color=black] at (-2.5,1.50){\scriptsize CPU multi--c{\oe}ur};
+\draw[fill=orange] (-3.6,0.25) rectangle (-1.4,1.25)
+                   (1.4,-0.25) rectangle (4.6,1.25);
+\draw[fill=yellow] (-3.3,0.35) rectangle (-2.5,0.70)
+                   (-3.3,0.80) rectangle (-2.5,1.15)
+                   (-2.3,0.35) rectangle (-1.5,0.70)
+                   (-2.3,0.80) rectangle (-1.5,1.15);
+\node[color=black] at (-2.9,0.50){\scriptsize core 1};
+\node[color=black] at (-2.9,0.97){\scriptsize core 2};
+\node[color=black] at (-1.9,0.50){\scriptsize core 4};
+\node[color=black] at (-1.9,0.97){\scriptsize core 3};
+\draw[fill=red] (-3.6,-0.25) rectangle (-1.4,0.15);
+\node[color=black] (ci) at (-2.5,-0.05){\scriptsize Internal cache};
+\draw[fill=red] (-3.6,-0.65) rectangle (-1.4,-1.15);
+\node[color=black] (ce) at (-2.5,-0.9){\scriptsize External cache};
+\draw[fill=green] (-3.8,-1.4) rectangle (-1.2,-1.95);
+\node[color=black] (me) at (-2.5,-1.65){\scriptsize RAM for CPU};
+\draw[thick,blue,<->] (ci)--(ce);
+\draw[thick,blue,<->] (ce)--(me);
+\node[double arrow, draw, left color=blue, right color=royalblue]  at (0,-1.5){\scriptsize PCI-Express};
+\node[color=black]  at (+3.0,1.50){\scriptsize GPU $n$ multi-processors};
+\foreach \c in {0,0.1,0.2,0.3} {
+\draw[fill=yellow]  (4.5-\c,1.1-\c) rectangle (1.8-\c,0.2-\c);
+  \foreach \d in {0,0.15,0.3,...,0.9} {
+    \draw[fill=Maroon]  (2.0+\d-\c,1.-\c) rectangle (2.1+\d-\c,0.7-\c);
+  }
+}
+\node at (3.35,0.55){\scriptsize SIMD units};
+\node (ml) [draw, left color=red, right color=red] at (3.0,0.1){\tiny Local memory};
+\node (mgpu) [draw, left color=red, right color=red] at (3.,-1.5){\scriptsize
+  RAM for GPU};
+\draw[thick,blue,<->] (ml)--(mgpu);
+\end{tikzpicture}
+\end{center}
+
+\end{frame}
+
+\subsection{Close view of GPGPU architecture}
+
+\begin{frame}{Close view of GPGPU architecture}
+
+\begin{minipage}{55mm}
+\begin{itemize}
+\item GPGPU : \textcolor{orange}{Set of $N$ tiny SIMD independant devices sharing same
+    global memory} : $N$ multiprocessors;
+\item Multiprocessor : \textcolor{orange}{Small SIMD device with :} {\scriptsize
+  \begin{itemize}
+    \item $k$ synchronized ALU;
+    \item 1 instruction decoder;
+    \item Three shared memory for all ALUs (included 2 cache memories)
+    \item R  registers distributed among the AlUs
+      (locals for each \textsl{thread}) (Example FERMI : 16384)
+  \end{itemize}
+}
+\end{itemize}
+\end{minipage}
+\begin{minipage}{5cm}
+\begin{center}
+\begin{tikzpicture}
+\draw[fill=cyan]   (-2cm,6cm) rectangle (2cm,1.5cm);
+\draw[fill=red] (-2cm,1cm) rectangle (2cm,0.1cm);
+\node at (-1.35,5.8){\tiny Device};
+\node at (-0.75,0.8){\tiny Global(Device)  Memory};
+\draw[fill=orange] (-1.5cm,5.5cm) rectangle (1.8cm,2.5cm);
+\node at (-0.55,5.3){\tiny Multiprocessor N};
+\draw[dashed,thick] (-0.55,5.2) -- (-0.75,4.6);
+\draw[fill=orange] (-1.7cm,4.75cm) rectangle (1.6cm,1.75cm);
+\node at (-0.75,4.5){\tiny Multiprocessor 2};
+\draw[fill=orange] (-1.9cm,4.55cm) rectangle (1.4cm,1.55cm);
+\node at (-0.95,4.3){\tiny Multiprocessor 1};
+\draw[fill=yellow] (-1.7cm,4.1cm) rectangle (1.2cm,3.8cm);
+\node at (-0.25,3.95){\tiny Local memory};
+\node[draw,left color=yellow, right color=yellow] at (-1.5cm,3.5cm){\tiny r};
+\node[draw,left color=yellow, right color=yellow] at (-1.05cm,3.5cm){\tiny r};
+\node[draw,left color=yellow, right color=yellow] at (-0.35cm,3.5cm){\tiny r};
+\draw[fill=lightyellow] (-1.6cm,3.2cm) rectangle (0.3cm,3cm);
+\node (p1)[draw,left color=green, right color=cyan] at (-1.45cm,3.1cm){\tiny $p_{1}$};
+\node (p2)[draw,left color=green, right color=cyan] at (-1cm,3.1){\tiny $p_{2}$};
+\draw[dotted,thick] (-0.75,3.1) -- (-0.25,3.1);
+\node (pk)[draw,left color=green, right color=cyan] at (-0.25cm,3.1cm){\tiny
+  $p_{k}$};
+\node[draw,left color=green, right color=cyan] at (0.6,3.1)
+{\tiny \begin{minipage}{0.7cm}Instr.\\ Unit\end{minipage}};
+\draw[fill=yellow] (-1.7cm,2.7cm) rectangle (1.1cm,2.2cm);
+\node at (-0.3,2.4){\tiny Texture cache};
+\draw[fill=yellow] (-1.7cm,2.1cm) rectangle (1.1cm,1.6cm);
+\node at (-0.3cm,1.8){\tiny Constant cache};
+\draw[<->] (-1.45cm,1cm) -- (p1);
+\draw[<->] (-1.00cm,1cm) -- (p2);
+\draw[<->] (-0.25cm,1cm) -- (pk);
+\draw[->]  (0.9cm,1cm) -- (0.9cm,1.6cm);
+\draw[->]  (0.7cm,1cm) -- (0.7cm,2.2cm);
+\draw[<->] (-1.3cm,3.3cm) -- (-1.3cm,3.8cm);
+\draw[<->] (-0.85cm,3.3cm) -- (-0.85cm,3.8cm);
+\draw[<->] (-0.1cm,3.3cm) -- (-0.1cm,3.8cm);
+\draw[->]  (-1.6cm,2.7cm) -- (-1.6cm,2.9cm);
+\draw[->]  (-1.15cm,2.7cm) -- (-1.15cm,2.9cm);
+\draw[->]  (-0.4,2.7cm) -- (-0.4,2.9cm);
+\draw[->]  (-1.3cm,2.1cm) -- (-1.3cm,2.9cm);
+\draw[->]  (-0.85cm,2.1cm) -- (-0.85cm,2.9cm);
+\draw[->]  (-0.1cm,2.1cm) -- (-0.1cm,2.9cm);
+
+\node[draw,left color=blue, right color=cyan] at (0.,-1.3cm){\large CPU + RAM};
+\node[double arrow, rotate=90,draw, left color=blue, right color=royalblue]  at (0,-0.5){\tiny PCI-E};
+
+\end{tikzpicture}
+\end{center}
+\end{minipage}
+\end{frame}
+
+\section{Execution model}
+
+\begin{frame}[containsverbatim]{Extended C}
+
+  \begin{itemize}
+  \item \textbf{\textcolor{blue}{New déclarations}} : \textcolor{orange}{\small global, local, local, constant,...}
+    \begin{lstlisting}
+      global float filter[N];
+      kernel void  convolve(float* image) {
+      local float region[M];
+      ...
+    \end{lstlisting}
+  \item \textbf{\textcolor{blue}{New reserved words}} : 
+    \textcolor{orange}{\small get\_local\_id, get\_global\_id, \ldots}
+    \begin{lstlisting}
+      region[get_global_id(0)] = image[i];
+    \end{lstlisting}
+  \item \textbf{\textcolor{blue}{Intrinsics}} : 
+    \textcolor{orange}{\small barrier}
+    \begin{lstlisting}
+      barrier(CLK_LOCAL_MEM_FENCE);
+      image[j] = result;  }
+  \end{lstlisting}
+  \item \textbf{\textcolor{blue}{Execution API}} :
+    \textcolor{orange}{\small Memory, symbol, execution management}
+    \begin{lstlisting}
+// Allocate memory on GPU
+cl::Buffer Ad(context, CL_MEM_READ_WRITE, bytes, myImg);
+    \end{lstlisting}
+  \item \textcolor{blue}{\bf Function calling}
+    \begin{lstlisting}
+// 1000 threads per groups of 10 threads
+q.enqueueNDRangeKernel(kernel, cl::NullRange, 
+                       cl::NDRange(1000), cl::NDRange(10));
+    \end{lstlisting}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[containsverbatim]{Threads distributions : groups and local threads}
+
+\begin{minipage}[c]{52mm}
+\begin{itemize}
+\item A kernel is executed as a grid of groups of threads
+  \begin{itemize}
+  \item 
+    \textcolor{orange}{\scriptsize All threads share same data memory space}
+  \end{itemize}
+\item A group of threads is a set of threads which can work together with :
+  \begin{itemize}
+  \item \textcolor{orange}{\scriptsize synchronizing between themself}
+  \item \textcolor{orange}{\scriptsize Sharing data through fast shared memory}
+  \end{itemize}
+\item Two threads being in different groups can't work together.
+  \begin{itemize}
+  \item 
+  \textcolor{orange}{\scriptsize Atomic operations added from hardware version HW 1.1}
+\end{itemize}
+\end{itemize}
+\end{minipage}
+\begin{minipage}[c]{53mm}
+\begin{tikzpicture}{56mm}
+\draw[fill=cyan] (0,0) rectangle (1cm,7cm);
+\node[color=black] at (2.5mm,68mm){\tiny \textbf{Host}};
+\draw[fill=green] (6mm,50mm) node[draw,fill] (K1) {\tiny
+  \begin{minipage}{6mm}Kernel\\ 1\end{minipage}};
+\draw[fill=green] (6mm,30mm) node[draw,fill] (K2) {\tiny
+  \begin{minipage}{6mm}Kernel\\ 2\end{minipage}};
+\draw[color=white,->,thick] (1mm,60mm) -- (1mm,1mm);
+
+\draw[fill=cyan] (15mm,0mm) rectangle (5cm,7cm);
+\node at (20mm,68mm){\tiny \textbf{device}};
+\draw[fill=green] (17mm,41mm) rectangle (48mm,65mm);
+\node at (25mm,62mm){\tiny \textbf{Grid 1}};
+\draw[fill=yellow] (22mm,55mm) node[draw,fill] (B00) {\tiny
+  \begin{minipage}{6mm}Group\\(0,0)\end{minipage}};
+\draw[fill=yellow] (32mm,55mm) node[draw,fill] (B10) {\tiny
+  \begin{minipage}{6mm}Group\\(1,0)\end{minipage}};
+\draw[fill=yellow] (42mm,55mm) node[draw,fill] (B20) {\tiny
+  \begin{minipage}{6mm}GRoup\\(2,0)\end{minipage}};
+
+\draw[fill=yellow] (22mm,46mm) node[draw,fill] (B01) {\tiny
+  \begin{minipage}{6mm}Group\\(0,1)\end{minipage}};
+\draw[fill=yellow] (32mm,46mm) node[draw,fill] (B11) {\tiny
+  \begin{minipage}{6mm}Group\\(1,1)\end{minipage}};
+\draw[fill=yellow] (42mm,46mm) node[draw,fill] (B21) {\tiny
+  \begin{minipage}{6mm}Group\\(2,1)\end{minipage}};
+\draw[thick, ->] (K1) -- (17mm,50mm);
+
+
+\draw[fill=green] (21mm,11mm) rectangle (44mm,40mm);
+\node at (29mm,38mm){\tiny \textbf{Grid 2}};
+
+\draw[fill=yellow] (26mm,30mm) node[draw,fill] {\tiny
+  \begin{minipage}{6mm}Group\\(0,0)\end{minipage}};
+\draw[fill=yellow] (36mm,30mm) node[draw,fill] {\tiny
+  \begin{minipage}{6mm}Group\\(1,0)\end{minipage}};
+\draw[thick,->] (K2) -- (21mm,30mm);
+
+\draw[thick,dashed] (27.7mm,42.5mm) -- (6.8mm,2.5mm);
+\draw[thick,dashed] (36mm  ,42.5mm) -- (56mm,2.5mm);
+\draw[thick,dashed] (27.7mm,49.5mm) -- (6.8mm,32mm);
+\draw[thick,dashed] (36mm  ,49.5mm) -- (56mm,32mm);
+
+
+
+\draw[fill=yellow, fill opacity=0.7] 
+  (6.8mm,2.5mm) rectangle (56mm,32mm);
+\node at (14mm,29mm) {\tiny Group (1,1)};
+\matrix[fill=red,matrix anchor=south west,nodes=draw] at (13mm,3mm) {
+\node{\begin{minipage}{6mm}\tiny Thread (0,0)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Thread (1,0)\end{minipage}};  && 
+\node{\begin{minipage}{6mm}\tiny Thread (2,0)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Thread (3,0)\end{minipage}};  \\
+\node{\begin{minipage}{6mm}\tiny Thread (0,1)\end{minipage}};  && 
+\node{\begin{minipage}{6mm}\tiny Thread (1,1)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Thread (2,1)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Thread (3,1)\end{minipage}};  \\
+\node{\begin{minipage}{6mm}\tiny Thread (0,2)\end{minipage}};  && 
+\node{\begin{minipage}{6mm}\tiny Thread (1,2)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Thread (2,2)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Thread (3,2)\end{minipage}};  \\ 
+};
+
+%\draw[step=0.1cm,color=gray] (0,0) grid (5cm,7cm);
+%\draw[step=0.5cm] (0,0) grid (5cm,7cm);
+
+\end{tikzpicture}
+\end{minipage}
+\end{frame}
+
+\begin{frame}[containsverbatim]{Blocks and threads identification}
+
+\begin{minipage}{5cm}
+\begin{itemize}
+\item Each thread and block have Ids :
+  \begin{itemize}
+  \item \textcolor{orange}{Each thread can know on which data he must work}
+  \item \textcolor{orange}{Group ID} : 1D, 2D or 3D
+  \item \textcolor{orange}{Thread ID}: 1D, 2D or 3D, local or global.
+  \end{itemize}
+\item The n--dim model simply the memory adressing
+  \begin{itemize}
+    \item \textcolor{orange}{Image processing}
+    \item \textcolor{orange}{Solving EDP on volumes or surfaces}
+    \item \ldots
+  \end{itemize}
+\end{itemize}
+\end{minipage}
+\begin{minipage}[c]{55mm}
+\begin{tikzpicture}{56mm}
+\draw[fill=cyan] (15mm,0mm) rectangle (5cm,7cm);
+\node at (20mm,68mm){\tiny \textbf{device}};
+\draw[fill=green] (17mm,41mm) rectangle (48mm,65mm);
+\node at (25mm,62mm){\tiny \textbf{Grid 1}};
+\draw[fill=yellow] (22mm,55mm) node[draw,fill] (B00) {\tiny
+  \begin{minipage}{6mm}Group\\(0,0)\end{minipage}};
+\draw[fill=yellow] (32mm,55mm) node[draw,fill] (B10) {\tiny
+  \begin{minipage}{6mm}Group\\(1,0)\end{minipage}};
+\draw[fill=yellow] (42mm,55mm) node[draw,fill] (B20) {\tiny
+  \begin{minipage}{6mm}Group\\(2,0)\end{minipage}};
+
+\draw[fill=yellow] (22mm,46mm) node[draw,fill] (B01) {\tiny
+  \begin{minipage}{6mm}Group\\(0,1)\end{minipage}};
+\draw[fill=yellow] (32mm,46mm) node[draw,fill] (B11) {\tiny
+  \begin{minipage}{6mm}Group\\(1,1)\end{minipage}};
+\draw[fill=yellow] (42mm,46mm) node[draw,fill] (B21) {\tiny
+  \begin{minipage}{6mm}Group\\(2,1)\end{minipage}};
+
+\draw[thick,dashed] (27.7mm,42.5mm) -- (6.8mm,2.5mm);
+\draw[thick,dashed] (36mm  ,42.5mm) -- (56mm,2.5mm);
+\draw[thick,dashed] (27.7mm,49.5mm) -- (6.8mm,32mm);
+\draw[thick,dashed] (36mm  ,49.5mm) -- (56mm,32mm);
+
+\draw[fill=yellow, fill opacity=0.7] 
+  (6.8mm,2.5mm) rectangle (56mm,32mm);
+\node at (14mm,29mm) {\tiny Group (1,1)};
+\matrix[fill=red,matrix anchor=south west,nodes=draw] at (13mm,3mm) {
+\node{\begin{minipage}{6mm}\tiny Thread (0,0)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Thread (1,0)\end{minipage}};  && 
+\node{\begin{minipage}{6mm}\tiny Thread (2,0)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Thread (3,0)\end{minipage}};  \\
+\node{\begin{minipage}{6mm}\tiny Thread (0,1)\end{minipage}};  && 
+\node{\begin{minipage}{6mm}\tiny Thread (1,1)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Thread (2,1)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Thread (3,1)\end{minipage}};  \\
+\node{\begin{minipage}{6mm}\tiny Thread (0,2)\end{minipage}};  && 
+\node{\begin{minipage}{6mm}\tiny Thread (1,2)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Thread (2,2)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Thread (3,2)\end{minipage}};  \\ 
+};
+
+\end{tikzpicture}
+\end{minipage}
+\end{frame}
+
+
+\begin{frame}[containsverbatim]{Intrinsec fonctions for groups and threads}
+\begin{minipage}{55mm}
+\begin{itemize}
+\item \textcolor{blue}{Reserved words for group}
+  \begin{itemize}
+  \item \textcolor{orange}{\small get\_local\_id({\tiny$\begin{array}{c}0\\1\\2\end{array}$})} :
+    position of the thread inside the  group;
+  \item \textcolor{orange}{\small get\_local\_size({\tiny$\begin{array}{c}0\\1\\2\end{array}$})}: 
+    dimensions of the group.
+  \end{itemize}
+\item \textcolor{blue}{Reserved words for grids} :
+  \begin{itemize}
+  \item \textcolor{orange}{\small get\_global\_id({\tiny$\begin{array}{c}0\\1\\2\end{array}$})}
+  : position of thread inside the grille;
+  \item \textcolor{orange}{\small get\_group\_id({\tiny$\begin{array}{c}0\\1\\2\end{array}$})}
+    : position of group inside the grid
+  \item \textcolor{orange}{\small get\_num\_groups({\tiny$\begin{array}{c}0\\1\\2\end{array}$})} 
+    define the dimension of the grid
+  \end{itemize}
+\end{itemize}
+\end{minipage}
+\begin{minipage}[c]{50mm}
+\begin{tikzpicture}{56mm}
+\draw[fill=yellow] (0mm,70mm) rectangle (50mm,42mm);
+
+\matrix[fill=red,matrix anchor=south west,draw,nodes=draw] at (12mm,49mm) {
+\node{\begin{minipage}{6mm}\tiny $T_{000}$\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny $T_{100}$\end{minipage}};  && 
+\node{\begin{minipage}{6mm}\tiny $T_{200}$\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny $T_{300}$\end{minipage}};  \\
+\node{\begin{minipage}{6mm}\tiny $T_{010}$\end{minipage}};  && 
+\node{\begin{minipage}{6mm}\tiny $T_{110}$\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny $T_{210}$\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny $T_{310}$\end{minipage}};  \\
+\node{\begin{minipage}{6mm}\tiny $T_{020}$\end{minipage}};  && 
+\node{\begin{minipage}{6mm}\tiny $T_{120}$\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny $T_{220}$\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny $T_{320}$\end{minipage}};  \\ 
+};
+
+
+\matrix[fill=red,matrix anchor=south west,draw,nodes=draw] at (6mm,43mm) {
+\node{\begin{minipage}{6mm}\tiny $T_{001}$\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny $T_{101}$\end{minipage}};  && 
+\node{\begin{minipage}{6mm}\tiny $T_{201}$\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny $T_{301}$\end{minipage}};  \\
+\node{\begin{minipage}{6mm}\tiny $T_{011}$\end{minipage}};  && 
+\node{\begin{minipage}{6mm}\tiny $T_{111}$\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny $T_{211}$\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny $T_{311}$\end{minipage}};  \\
+\node{\begin{minipage}{6mm}\tiny $T_{021}$\end{minipage}};  && 
+\node{\begin{minipage}{6mm}\tiny $T_{121}$\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny $T_{221}$\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny $T_{321}$\end{minipage}};  \\ 
+};
+\draw[<->,thick] (12mm,67mm) -- node[above]{\tiny get\_local\_size(0)} (49.5mm,67mm);
+\draw[<->,thick] (4mm,43mm) -- node[above,sloped]{\tiny get\_local\_size(1)} (4mm,60mm);
+\draw[<->,thick] (6mm,60mm) -- node[above,sloped]{\tiny get\_local\_size(2)} (12mm,67mm);
+\node at (4.5mm,69mm) {\tiny Group 1,1};
+
+\draw[fill=green ] (0mm,0mm)  rectangle (50mm,38mm);
+\matrix[fill=yellow,matrix anchor=south west,draw,nodes=draw] at (6mm,10mm) {
+\node{\begin{minipage}{6mm}\tiny Group (0,0)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Group (1,0)\end{minipage}};  && 
+\node{\begin{minipage}{6mm}\tiny Group (2,0)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Group (3,0)\end{minipage}};  \\
+\node{\begin{minipage}{6mm}\tiny Group (0,1)\end{minipage}};  && 
+\node{\begin{minipage}{6mm}\tiny Group (1,1)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Group (2,1)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Group (3,1)\end{minipage}};  \\
+};
+\draw[<->,thick] (6mm,28mm) -- node[above]{\tiny get\_num\_groups(0)} (43.5mm,28mm);
+\draw[<->,thick] (4mm,10mm) -- node[above,sloped]{\tiny get\_num\_groups(1)} (4mm,27mm);
+\node at (5mm,35mm) {\tiny Grid 1};
+%\draw[step=0.1cm,color=gray!50!white] (0,0) grid (5cm,7cm);
+%\draw[step=0.5cm,color=gray] (0,0) grid (5cm,7cm);
+
+\end{tikzpicture}
+\end{minipage}
+\end{frame}
+
+\section{API for GPU}
+
+\begin{frame}{Property of these APIs : easy to learn and light}
+\begin{itemize}
+\item The Api is an extension of C language
+  \textcolor{green}{$\rightarrow$} easy to learn;
+
+\item Harware is build for light execution and schedule of the threads;
+\textcolor{green}{$\rightarrow$} High performance
+\end{itemize}
+\end{frame}
+
+\begin{frame}[containsverbatim]{Memory allocation}
+
+The Host program (on CPU) must allocate and free memory on GPU
+\begin{itemize}
+\item \textcolor{blue}{\texttt{cl::Buffer}}
+  \begin{itemize}
+  \item Allocate objects on \textbf{global memory} of GPU
+  \item Two parameters :
+    \begin{enumerate}
+    \item Size of the allocated object;
+    \item Kind of array (read only, copied array, write only, \ldots)
+    \end{enumerate}
+  \end{itemize}
+\item \textcolor{blue}{Destruction of buffer}
+  \begin{itemize}
+  \item Free object from the global memory of GPGPU;
+  \end{itemize}
+\end{itemize}
+
+\begin{exampleblock}{Ex.: Allocate an matrix 1024*1024 in simple precision}
+    \begin{lstlisting}
+#define MATRIX_SIZE 1024*1024
+int size = MATRIX_SIZE*sizeof(float);
+cl::Buffer MyMatrixOnDevice( context, CL_MEM_WRITE, size) ;
+    \end{lstlisting}
+\end{exampleblock}
+\end{frame}
+
+\begin{frame}{Exchanging data between CPU and GPGPU}
+
+Host program must explicitly copy data from host to device and device to host.
+
+\begin{itemize}
+\item Try to limit the number of copies which are slow (go through PCI-Express bus)
+\item Copies can be synchronous or asynchronous;
+\item Some smart functions are able to copy or not, depending if the global memory
+  are different or not for host and device.
+\end{itemize}
+\end{frame}
+
+
+\section{Optimisation on GPGPU}
+
+\begin{frame}{Performance of kernels}
+
+\begin{center}\Large
+Building a high optimized application on GPU
+\end{center}
+
+\begin{itemize}
+\item GPU Kernels and threads
+\item Warps
+\item Memory : Texture and constant memory
+\item Shared memory
+\item Size of blocks
+\end{itemize}
+\end{frame}
+
+\subsection{GPU kernels and threads}
+
+\begin{frame}{GPU Kernels and threads}
+\begin{itemize}
+\item Some parallel part of an application will be executed by GPU as Kernel;
+  \begin{itemize}
+  \item On old GPU hardware (before Fermi for NVidia), once kernel can be
+    executed in the same time on device;
+  \item Several threads execute the kernels;
+  \end{itemize}
+\item Differences between GPU threads and CPU threads :
+  \begin{itemize}
+  \item GPU threads are very light :
+    \begin{itemize}
+    \item Create a thread is free (no time spended);
+    \item Instantaneous switch between threads.
+    \end{itemize}
+  \item GPUs must use more than 1000 thread to be efficient.
+    \begin{itemize}
+    \item CPUs use few threads (4, 8, 16 threads)
+    \end{itemize}
+  \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[containsverbatim]{Array of threads}
+
+A GPU Kernel is executed on an n--dimensional array of thread (n=1,2 or 3)
+\begin{itemize}
+\item All threads execute same code
+\item Each thread owns a ID used to compute the memory adresses
+and control the conditional jump (if, and so\ldots)
+\end{itemize}
+
+\begin{tikzpicture}
+\matrix[matrix anchor=south west,nodes=draw] at (0mm,2cm) {
+\node[fill=green!90!blue,text height=10pt] (n1) {1}; & 
+\node[fill=green!90!blue,text height=10pt] (n2) {2}; & 
+\node[fill=green!90!blue,text height=10pt] (n3) {3}; & 
+\node[fill=green!90!blue,text height=10pt] (n4) {4}; & 
+\node[fill=green!90!blue,text height=10pt] (n5) {5}; & 
+\node[fill=green!90!blue,text height=10pt] (n6) {6}; \\
+};
+
+\node[anchor=south west] at (0mm,0cm) {
+  \begin{lstlisting}
+    float x = input[get_global_id(0)];
+    float y = func(x);
+    output[get_global_id(0)] = y;
+  \end{lstlisting}
+};
+
+\draw[->,decorate, decoration=snake] (n1.south) -- +(7.5mm,-7.5mm);
+\draw[->,decorate, decoration=snake] (n2.south) -- +(7.5mm,-7.5mm);
+\draw[->,decorate, decoration=snake] (n3.south) -- +(7.5mm,-7.5mm);
+\draw[->,decorate, decoration=snake] (n4.south) -- +(7.5mm,-7.5mm);
+\draw[->,decorate, decoration=snake] (n5.south) -- +(7.5mm,-7.5mm);
+\draw[->,decorate, decoration=snake] (n6.south) -- +(7.5mm,-7.5mm);
+
+\matrix[matrix anchor=south west,nodes=draw] at (13mm,-13mm) {
+\node[fill=orange!90!blue,text height=10pt] (m1) {1}; & 
+\node[fill=orange!90!blue,text height=10pt] (m2) {2}; & 
+\node[fill=orange!90!blue,text height=10pt] (m3) {3}; & 
+\node[fill=orange!90!blue,text height=10pt] (m4) {4}; & 
+\node[fill=orange!90!blue,text height=10pt] (m5) {5}; & 
+\node[fill=orange!90!blue,text height=10pt] (m6) {6}; \\
+};
+
+\draw[<-,decorate, decoration=snake] (m1.north) -- +(-7.5mm,7.5mm);
+\draw[<-,decorate, decoration=snake] (m2.north) -- +(-7.5mm,7.5mm);
+\draw[<-,decorate, decoration=snake] (m3.north) -- +(-7.5mm,7.5mm);
+\draw[<-,decorate, decoration=snake] (m4.north) -- +(-7.5mm,7.5mm);
+\draw[<-,decorate, decoration=snake] (m5.north) -- +(-7.5mm,7.5mm);
+\draw[<-,decorate, decoration=snake] (m6.north) -- +(-7.5mm,7.5mm);
+
+\end{tikzpicture}
+\end{frame}
+
+\begin{frame}[containsverbatim]{Thread ID}
+
+The local ID of a thread in a group is :
+\begin{lstlisting}
+t_id = get_local_id(0) + 
+       get_local_id(1)*get_local_size(0)
+       get_local_id(2)*(get_local_size(0)*get_local_size(1));
+\end{lstlisting}
+
+\begin{itemize}
+\item \textcolor{orange}{\texttt{get\_local\_id({\tiny$\begin{array}{c}0\\1\\2\end{array}$})}} : 
+  Indice of thread in direction 0, 1 or 2
+\item \textcolor{orange}{\texttt{get\_local\_size({\tiny$\begin{array}{c}0\\1\\2\end{array}$})}} :
+  Size of groupe in dimension 0, 1 or 2
+\end{itemize}
+\end{frame}
+
+\begin{frame}[containsverbatim]{Thread ID(2)}
+
+The global ID of a thread in a grid is :
+\begin{lstlisting}
+t_id = get_global_id(0) + 
+       get_global_id(1)*get_global_size(0)
+       get_global_id(2)*(get_global_size(0)*get_global_size(1));
+\end{lstlisting}
+
+It's possible to compute global indice from local indice :
+\begin{lstlisting}
+t_id = get_local_id(0) + get_group_id(0)*get_local_size(0) + 
+       get_local_id(1)*get_global_size(0) + 
+       get_group_id(1)*get_local_size(1) +
+       get_local_id(2)*(get_global_size(0)*get_global_size(1)) +
+       get_group_id(2)*get_local_size(2);
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[containsverbatim]{Example : Basic 2D Addition in a group}
+
+Kernel for a 2D arrays addition :
+{\scriptsize
+\begin{lstlisting}
+kernel void 
+addMatrix(global float* A, global float* B, global float* C, int N) {
+ int ind=get_global_id(0) + get_global_id(1)*get_global_size(0);
+ if ((get_global_id(0)<N)&&(get_global_id(1)<N)) C[ind]=A[ind]+B[ind];
+}
+\end{lstlisting}
+}
+API calling the previous kernel :
+{\scriptsize
+\begin{lstlisting}
+void addMat(float* A, float* B, float* C, int N) {
+ cl::Buffer Ad(context, CL_MEM_READ_ONLY|CL_MEM_USE_HOST_PTR, 
+               N*N*sizeof(float), Ah);
+ cl::Buffer Bd(context, CL_MEM_READ_ONLY|CL_MEM_USE_HOST_PTR, 
+               N*N*sizeof(float), Bh);
+ cl::Buffer Cd(context, CL_MEM_READ_WRITE|CL_MEM_COPY_HOST_PTR, 
+               N*N*sizeof(float), Ch);
+ // Calcule la configuration d'execution du noyau
+ int grpSz = 16, grdSz=(N%grpSz>0 ? grpSz*(N/grpSz+1),N);
+ addMatKer.setArg(0,Ad); addMatKer.setArg(1,Bd);
+ addMatKer.setArg(2,Cd); addMatKer.setArg(3,N);
+ q.enqueueNDRangeKernel(addMatKer, cl::NullRange,
+                 cl::NDRange(grdSz,grdSz),cl::NDRange(grpSz,grpSz));
+ q.finish();
+ // Copie le resultat sur le CPU
+ q.enqueueReadBuffer(Ad, true, 0, N*N*sizeof(float), Ah);
+}
+\end{lstlisting}
+}
+\end{frame}
+
+\subsection{Warps}
+
+\begin{frame}{Warps}
+
+On GPU :
+\begin{itemize}
+\item Each group of threads is splitted in warps
+\item Each warp contains same number of threads (32 on NVIDIA)
+\item Each warp contains consecutive threads, first warp containing
+  thread number 0;
+\item Each warp is running by the multiprocessor as pure SIMD device
+\item Divergent branchs inside a same warp are serialized :
+  \begin{itemize}
+  \item If all threads into a warp go to the same branch, no time penality
+  \item If some threads into a warp go to another branch, the warp spend
+    the addition of time for both branch;
+  \item If all threads go to $n$ branchs, the warp spend the addition of 
+    time of $n$ branchs;
+  \end{itemize}
+\end{itemize}
+\end{frame}
+
+\subsection{Mémoire : texture et mémoire constante}
+
+\begin{frame}{Texture and constant memory}
+
+\begin{itemize}
+\item Texture memory contains a cache memory
+  \begin{itemize}
+  \item Texture memory can be seen as  1D, 2D or 3D array
+  \item In read only \alert{but}
+  \item An 1D texture can be associated to the global memory
+    \begin{itemize}
+    \item Using cache memory to read
+    \item Write in global memory is possible
+    \end{itemize}
+  \end{itemize}
+\item Constant memory use cache memory
+  \begin{itemize}
+  \item 4 cycles to read in a simple half-warp
+    \begin{itemize}
+    \item Total cost is 4 cycles if all threads into a warp read same address
+    \item Total cost is 64 cycles if all threads into a warp read different addresses
+    \end{itemize}
+  \end{itemize}
+\end{itemize}
+\end{frame}
+
+\subsection{Shared memory}
+
+\begin{frame}{Shared memory}
+
+\begin{itemize}
+\item 100 times faster than global memory
+\item Threads of same group can cooperate thanks to the shared memory
+  \begin{itemize}
+  \item Max 48 KBytes per multiprocessors on NVIDIA (beware, shared with the cache memory)
+  \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Shared memory ; performance issue}
+
+\begin{itemize}
+\item Ideal case :
+  \begin{itemize}
+  \item All threads of a warp access globally to a different consecutive addresses
+  \item All threads of a warp access to the same variable
+  \end{itemize}
+\item Worst case :
+  \begin{itemize}
+  \item Some threads read the same variable (but not all threads)
+  \item Memory cost = max \# of access of the same variable
+  \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Ideal case}
+
+\begin{minipage}[c]{3cm}
+\begin{tikzpicture}
+\draw[xstep=1cm,ystep=0.5cm] (0,0) grid (1cm,8cm);
+\draw[xstep=1cm,ystep=0.5cm] (1.99cm,0) grid (3cm,8cm);
+\foreach \b / \x in {0 / 0.25,1 / 0.75,2 / 1.25, 3/1.75, 4/2.25,
+  5/2.75, 6/3.25, 7/3.75, 8/4.25, 9/4.75, 10/5.25, 11/5.75,
+  12/6.25, 13/6.75, 14/7.25,15 / 7.75} {
+\draw (0.5cm,\x cm) node {\tiny Thread \b};
+\draw (2.5cm,\x cm) node {\tiny Bank   \b};
+\draw[thick, color=blue,->] (1cm, \x cm) -- (2cm, \x cm);
+}
+\end{tikzpicture}
+\end{minipage}
+\begin{minipage}[c]{4cm}
+\small
+\textbf{Ideal access}
+Each thread of the warp access to different successive variables
+\end{minipage}
+\begin{minipage}[c]{3cm}
+\begin{tikzpicture}
+\draw[xstep=1cm,ystep=0.5cm] (0,0) grid (1cm,8cm);
+\draw[xstep=1cm,ystep=0.5cm] (1.99cm,0) grid (3cm,8cm);
+\foreach \b / \x in {0 / 0.25,1 / 0.75,2 / 1.25, 3/1.75, 4/2.25,
+  5/2.75, 6/3.25, 7/3.75, 8/4.25, 9/4.75, 10/5.25, 11/5.75,
+  12/6.25, 13/6.75, 14/7.25,15 / 7.75} {
+\draw (0.5cm,\x cm) node {\tiny Thread \b};
+\draw (2.5cm,\x cm) node {\tiny Bank   \b};
+}
+\foreach \b / \x in {0.25 / 1.25,0.75 / 0.25,1.25 / 2.75, 1.75/1.75, 2.25/2.25,
+  2.75/0.75, 3.25/3.25, 3.75/3.75, 4.25/5.75, 4.75/4.75, 5.25/5.25, 5.75/4.25,
+  6.25/6.25, 6.75/6.75, 7.25/7.25,7.75 / 7.75} {
+\draw[thick, color=blue,->] (1cm, \b cm) -- (2cm, \x cm);
+}
+\end{tikzpicture}
+\end{minipage}
+\end{frame}
+
+\begin{frame}{Ideal and worst case}
+
+\begin{minipage}[c]{3cm}
+\begin{tikzpicture}
+\draw[xstep=1cm,ystep=0.5cm] (0,0) grid (1cm,8cm);
+\draw[xstep=1cm,ystep=0.5cm] (1.99cm,0) grid (3cm,8cm);
+\foreach \b / \x in {0 / 0.25,1 / 0.75,2 / 1.25, 3/1.75, 4/2.25,
+  5/2.75, 6/3.25, 7/3.75, 8/4.25, 9/4.75, 10/5.25, 11/5.75,
+  12/6.25, 13/6.75, 14/7.25,15 / 7.75} {
+\draw (0.5cm,\x cm) node {\tiny Thread \b};
+\draw (2.5cm,\x cm) node {\tiny Bank   \b};
+\draw[thick, color=blue,->] (1cm, \x cm) -- (2cm, 4.75 cm);
+}
+\end{tikzpicture}
+\end{minipage}
+\begin{minipage}[c]{4cm}
+\small
+\begin{itemize}
+\item[$\leftarrow$] Each thread read the same variable
+  (broadcasting)
+\item[] Several threads access to the same variable :\alert{conflicts $\rightarrow$}
+\end{itemize}
+\end{minipage}
+\begin{minipage}[c]{3cm}
+\begin{tikzpicture}
+\draw[xstep=1cm,ystep=0.5cm] (0,0) grid (1cm,8cm);
+\draw[xstep=1cm,ystep=0.5cm] (1.99cm,0) grid (3cm,8cm);
+\foreach \b / \x in {0 / 0.25,1 / 0.75,2 / 1.25, 3/1.75, 4/2.25,
+  5/2.75, 6/3.25, 7/3.75, 8/4.25, 9/4.75, 10/5.25, 11/5.75,
+  12/6.25, 13/6.75, 14/7.25,15 / 7.75} {
+\draw (0.5cm,\x cm) node {\tiny Thread \b};
+\draw (2.5cm,\x cm) node {\tiny Bank   \b};
+}
+\foreach \b / \x in {0.25 / 1.25,0.75 / 0.25,1.25 / 1.75, 1.75/1.75, 2.25/2.25,
+  2.75/0.75, 3.25/3.25, 3.75/3.25, 4.25/3.25, 4.75/4.75, 5.25/5.25, 5.75/4.25,
+  6.25/6.25, 6.75/6.75, 7.25/7.25,7.75 / 7.75} {
+\draw[thick, color=red,->] (1cm, \b cm) -- (2cm, \x cm);
+}
+\end{tikzpicture}
+\end{minipage}
+\end{frame}
+
+\subsection{Conditions branch and unrolling}
+
+\begin{frame}{Conditions branch and unrolling}
+
+  \begin{itemize}
+  \item Avoid conditional branches inside the kernel
+    \begin{itemize}
+    \item Minimize divergent branches to avoid time penality
+    \item \underline{Tricks} :
+      \begin{itemize}
+      \item Try to specialize the kernel in function of the condition
+        (size by example)
+      \item Try to use mask technics
+      \end{itemize}
+    \end{itemize}
+  \item  Avoid loops inside the kernel
+    \begin{itemize}
+    \item Try to unroll a loop at hand if the length of the loop is known
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\subsection{Size of groups}
+
+\begin{frame}{Optimal number of threads per group}
+
+  \begin{itemize}
+  \item Choose the number of threads per group as a multiple of the size of a warp;
+    \begin{itemize}
+    \item Try to avoid unused threads in a warp
+    \end{itemize}
+  \item Lot of threads per group = better memory access optimization
+    \begin{itemize}
+    \item But calling a kernel with lof of threads can crash the kernel if too much
+      registers are used;
+    \end{itemize}
+  \item Heuristics:
+    \begin{itemize}
+    \item Minimal threads for the hardware : 64 threads per group
+      \begin{itemize}
+      \item Only if lot of concurrent blocks
+      \end{itemize}
+    \item 192 or 256 threads are better choices :
+      \begin{itemize}
+      \item Generally enough registers to compile and executing kernels;
+      \end{itemize}
+    \item Depending of your kernel computation : let's try !
+    \end{itemize}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Heuristics size of grid/group}
+
+  \begin{itemize}
+  \item \# of groups $>$ \# of multiprocessors
+    \begin{itemize}
+    \item Each multiprocessor has a group to execute
+    \end{itemize}
+  \item \# of groups / \# of multiprocessors $>$ 2
+    \begin{itemize}
+    \item Several groups can be in concurrence in a multiprocessor
+    \item Groups which don't wait with a \texttt{barrier} are always active
+    \item Relativ to available ressources -- registers, shared memory
+    \end{itemize}
+  \item \# of groups $>$ 100 to be efficient on futurs hardware
+    \begin{itemize}
+    \item Groups executed in pipeline on multiprocessors
+    \item 1000 groups per grid should be efficient for future generation of GPUs
+    \end{itemize}
+  \end{itemize}
+\end{frame}
+
+\end{document}

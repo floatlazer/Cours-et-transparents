@@ -1,0 +1,2822 @@
+\documentclass{beamer}
+\usepackage{tikz}
+\usetikzlibrary{patterns}
+\usetikzlibrary{shadows}
+%\usetikzlibrary{trees}
+\usepgflibrary{shapes.arrows}
+\usetikzlibrary{arrows}
+\usetikzlibrary{shapes}
+\usetikzlibrary{decorations.pathmorphing}
+\usepackage{amsmath, amssymb}
+\usepackage[utf8x]{inputenc}
+\usepackage{colortbl}
+\usepackage[french]{babel}
+\usepackage{listings}
+\usepackage{times}
+\usepackage{xcolor}
+\usepackage{fp}
+\usepackage{algorithmic}
+%\makeatletter
+
+\newcommand{\R}{\mathbb{R}}
+%\newcommand{\C}{\mathbb{C}}
+
+\definecolor{royalblue}{rgb}{0.3,0.5,0.9}
+\definecolor{lightblue}{rgb}{0.7,0.7,1.0}
+\definecolor{navyblue}{rgb}{0.1,0.2,0.7}
+\definecolor{Maroon}{rgb}{0.5,0.5,0.1}
+
+\title{Cuda}
+\author[Juvigny]{Xavier Juvigny}
+\institute{ONERA/CHP}
+\date[C2013]{February 2013}
+\subject{Cuda}
+
+%\pgfdeclareimage[interpolate=true,width=2cm,height=0.5cm]{logoEsilv}{esilv}
+\pgfdeclareimage[interpolate=true,width=.45\textwidth]{cudavisu1}{CudaVisual1}
+\pgfdeclareimage[interpolate=true,width=.45\textwidth]{cudavisu2}{CudaVisual2}
+
+\lstloadlanguages{[ISO]C++,Python,[90]Fortran}
+\lstset{
+    language=C++
+  , frame=single
+  , basicstyle=\scriptsize
+  , keywordstyle=\color{blue}\bfseries
+  , commentstyle=\color{red}
+  , stringstyle=\color{magenta}\ttfamily
+  , backgroundcolor=\color{verylightgray}
+}
+
+%\usetheme{Onera2007}
+\setbeamercovered{invisible} 
+\setbeamertemplate{navigation symbols}{}
+
+\definecolor{green!50!black}{rgb}{0.3,0.5,0.9}
+\definecolor{navyblue}{rgb}{0.1,0.2,0.7}
+\definecolor{darkgreen}{rgb}{0. 0.2 0}
+\definecolor{darkred}{rgb}{0.4 0 0}
+\definecolor{green!50!black}{rgb}{0.2 0. 0.2}
+\definecolor{lightgreen!50!black}{rgb}{0.4 0. 0.4}
+\definecolor{midblue}{rgb}{0. 0.2 0.4}
+\definecolor{verylightgray}{rgb}{0.95 0.95 1.0}
+\definecolor{lightyellow}{rgb}{1.0 0.95 0.75}
+
+% Compteurs pour certaines images
+\newcounter{gp}
+\newcounter{lp}
+
+
+\lstloadlanguages{[ISO]C++,Python,[90]Fortran}
+\lstset{
+    language=C++
+  , frame=single
+  , basicstyle=\scriptsize
+  , keywordstyle=\color{blue}\bfseries
+  , commentstyle=\color{red}
+  , stringstyle=\color{magenta}\ttfamily
+  , backgroundcolor=\color{verylightgray}
+}
+
+\begin{document}
+\frame[plain]{\maketitle}
+
+\section{Architecture d'un GPU nVIDIA}
+
+\subsection{Vue d'ensemble CPU--GPU}
+
+\begin{frame}{Vue d'ensemble CPU--GPU}
+
+\begin{itemize}
+\item le CPU utilise le GPU comme un coprocesseur scientifique pour certains
+  calculs bien adaptés aux architectures SIMD;
+\item Le CPU et le GPU sont tous les deux multi--c{\oe}urs et associés à une
+  hiérarchie mémoire
+\end{itemize}
+
+\begin{center}
+\begin{tikzpicture}
+\draw (-4,-2) rectangle (-1,2) (1,-2) rectangle (5,2);
+\draw[fill=cyan] (-3.75,-0.5) rectangle (-1.25,1.75)
+                 ( 1.25,-0.5) rectangle ( 4.75,1.75) ;
+\node[color=black] at (-2.5,1.50){\scriptsize CPU multi--c{\oe}ur};
+\draw[fill=orange] (-3.6,0.25) rectangle (-1.4,1.25)
+                   (1.4,-0.25) rectangle (4.6,1.25);
+\draw[fill=yellow] (-3.3,0.35) rectangle (-2.5,0.70)
+                   (-3.3,0.80) rectangle (-2.5,1.15)
+                   (-2.3,0.35) rectangle (-1.5,0.70)
+                   (-2.3,0.80) rectangle (-1.5,1.15);
+\node[color=black] at (-2.9,0.50){\scriptsize core 1};
+\node[color=black] at (-2.9,0.97){\scriptsize core 2};
+\node[color=black] at (-1.9,0.50){\scriptsize core 4};
+\node[color=black] at (-1.9,0.97){\scriptsize core 3};
+\draw[fill=red] (-3.6,-0.25) rectangle (-1.4,0.15);
+\node[color=black] (ci) at (-2.5,-0.05){\scriptsize Cache interne};
+\draw[fill=red] (-3.6,-0.65) rectangle (-1.4,-1.15);
+\node[color=black] (ce) at (-2.5,-0.9){\scriptsize Cache externe};
+\draw[fill=green] (-3.8,-1.4) rectangle (-1.2,-1.95);
+\node[color=black] (me) at (-2.5,-1.65){\scriptsize RAM carte CPU};
+\draw[thick,blue,<->] (ci)--(ce);
+\draw[thick,blue,<->] (ce)--(me);
+\node[double arrow, draw, left color=blue, right color=royalblue]  at (0,-1.5){\scriptsize PCI-Express};
+\node[color=black]  at (+3.0,1.50){\scriptsize GPU $n$ multi-processeurs};
+\foreach \c in {0,0.1,0.2,0.3} {
+\draw[fill=yellow]  (4.5-\c,1.1-\c) rectangle (1.8-\c,0.2-\c);
+  \foreach \d in {0,0.15,0.3,...,0.9} {
+    \draw[fill=Maroon]  (2.0+\d-\c,1.-\c) rectangle (2.1+\d-\c,0.7-\c);
+  }
+}
+\node at (3.35,0.55){\scriptsize Unités SIMD};
+\node (ml) [draw, left color=red, right color=red] at (3.0,0.1){\tiny Mémoire
+  locale};
+\node (mgpu) [draw, left color=red, right color=red] at (3.,-1.5){\scriptsize
+  RAM de la carte GPU};
+\draw[thick,blue,<->] (ml)--(mgpu);
+\end{tikzpicture}
+\end{center}
+
+\end{frame}
+
+\subsection{Détails de l'architecture d'un GPU}
+
+\begin{frame}{Détail de l'architecture d'un GPU}
+
+\begin{minipage}{55mm}
+\begin{itemize}
+\item GPU : \textcolor{orange}{Ensemble de $N$ petites machines SIMD indépendantes partageant une
+  mémoire globale} : $N$ multiprocesseurs;
+\item Multiprocesseur : \textcolor{orange}{Petite machine SIMD avec :} {\scriptsize
+  \begin{enumerate}
+    \item $k$ ALU synchronisés ($k=32$);
+    \item 1 décodeur d'instruction;
+    \item 3 mémoires partagées entre toutes les ALUs (dont 2 caches);
+    \item 8192 (FERMI : 16384) registres distribués entre les ALUs
+      (seront propre à chaque \textsl{thread}).
+  \end{enumerate}
+}
+\end{itemize}
+\end{minipage}
+\begin{minipage}{5cm}
+\begin{center}
+\begin{tikzpicture}
+\draw[fill=cyan]   (-2cm,6cm) rectangle (2cm,1.5cm);
+\draw[fill=red] (-2cm,1cm) rectangle (2cm,0.1cm);
+\node at (-1.35,5.8){\tiny Device};
+\node at (-1.15,0.8){\tiny Device Memory};
+\draw[fill=orange] (-1.5cm,5.5cm) rectangle (1.8cm,2.5cm);
+\node at (-0.55,5.3){\tiny Multiprocessor N};
+\draw[dashed,thick] (-0.55,5.2) -- (-0.75,4.6);
+\draw[fill=orange] (-1.7cm,4.75cm) rectangle (1.6cm,1.75cm);
+\node at (-0.75,4.5){\tiny Multiprocessor 2};
+\draw[fill=orange] (-1.9cm,4.55cm) rectangle (1.4cm,1.55cm);
+\node at (-0.95,4.3){\tiny Multiprocessor 1};
+\draw[fill=yellow] (-1.7cm,4.1cm) rectangle (1.2cm,3.8cm);
+\node at (-0.25,3.95){\tiny Shared memory};
+\node[draw,left color=yellow, right color=yellow] at (-1.5cm,3.5cm){\tiny r};
+\node[draw,left color=yellow, right color=yellow] at (-1.05cm,3.5cm){\tiny r};
+\node[draw,left color=yellow, right color=yellow] at (-0.35cm,3.5cm){\tiny r};
+\draw[fill=lightyellow] (-1.6cm,3.2cm) rectangle (0.3cm,3cm);
+\node (p1)[draw,left color=green, right color=cyan] at (-1.45cm,3.1cm){\tiny $p_{1}$};
+\node (p2)[draw,left color=green, right color=cyan] at (-1cm,3.1){\tiny $p_{2}$};
+\draw[dotted,thick] (-0.75,3.1) -- (-0.25,3.1);
+\node (pk)[draw,left color=green, right color=cyan] at (-0.25cm,3.1cm){\tiny
+  $p_{k}$};
+\node[draw,left color=green, right color=cyan] at (0.6,3.1)
+{\tiny \begin{minipage}{0.7cm}Instr.\\ Unit\end{minipage}};
+\draw[fill=yellow] (-1.7cm,2.7cm) rectangle (1.1cm,2.2cm);
+\node at (-0.3,2.4){\tiny Texture cache};
+\draw[fill=yellow] (-1.7cm,2.1cm) rectangle (1.1cm,1.6cm);
+\node at (-0.3cm,1.8){\tiny Constant cache};
+\draw[<->] (-1.45cm,1cm) -- (p1);
+\draw[<->] (-1.00cm,1cm) -- (p2);
+\draw[<->] (-0.25cm,1cm) -- (pk);
+\draw[->]  (0.9cm,1cm) -- (0.9cm,1.6cm);
+\draw[->]  (0.7cm,1cm) -- (0.7cm,2.2cm);
+\draw[<->] (-1.3cm,3.3cm) -- (-1.3cm,3.8cm);
+\draw[<->] (-0.85cm,3.3cm) -- (-0.85cm,3.8cm);
+\draw[<->] (-0.1cm,3.3cm) -- (-0.1cm,3.8cm);
+\draw[->]  (-1.6cm,2.7cm) -- (-1.6cm,2.9cm);
+\draw[->]  (-1.15cm,2.7cm) -- (-1.15cm,2.9cm);
+\draw[->]  (-0.4,2.7cm) -- (-0.4,2.9cm);
+\draw[->]  (-1.3cm,2.1cm) -- (-1.3cm,2.9cm);
+\draw[->]  (-0.85cm,2.1cm) -- (-0.85cm,2.9cm);
+\draw[->]  (-0.1cm,2.1cm) -- (-0.1cm,2.9cm);
+
+\node[draw,left color=blue, right color=cyan] at (0.,-1.3cm){\large CPU + RAM};
+\node[double arrow, rotate=90,draw, left color=blue, right color=royalblue]  at (0,-0.5){\tiny PCI-E};
+
+\end{tikzpicture}
+\end{center}
+\end{minipage}
+\end{frame}
+
+\section{Principe de compilation et d'exécution en CUDA}
+
+\begin{frame}{Principe de compilation CUDA et C++}
+
+Plusieurs cas de figure :
+
+\begin{itemize}
+\item Compilation d'un code entièrement développé en CUDA;
+\item Compilation d'un code CUDA avec récupération de code C/C++;
+\item Compilation code CUDA avec compilateur spécifique pour 
+  la partie C/C++ sur CPU.
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}{Compilation d'un code entièrement développé en CUDA}
+
+  \begin{exampleblock}{Contenu et production du code}
+    \begin{itemize}
+    \item Définitions variables et fonctions avec ``quatificateurs''
+      CUDA.
+    \item Du code C ou C++ avec fonctionnalités CUDA;
+    \item Code C ou C++ ``standard''.
+    \item Les extensions : ``.h'' pour les headers, ``.cu'' pour les sources.
+    \item On compile à l'aide du compilateur NVida : \texttt{nvcc}
+    \item On obtient un code CPU contenant du code GPU intégré.
+    \end{itemize}
+  \end{exampleblock}
+
+  \begin{alertblock}{Pour les codes C/C++ simples}
+    \begin{itemize}
+    \item Possibilité de tous compiler avec nvcc dans des fichiers .cu
+    \item Mais les optimisations pour le CPU peuvent en souffrir.
+    \end{itemize}
+  \end{alertblock}
+\end{frame}
+
+\begin{frame}{Compilation d'un code avec récupération sources C/C++}
+  \begin{exampleblock}{Contenu et production du code}
+    \begin{itemize}
+    \item On compile les fichiers C/C++ (.c, .cc, .h)  avec nvcc;
+    \item Les fichiers contenant du code Cuda (.cu, .h) avec nvcc;
+    \item On fait une édition des liens du tout pour obtenir un code binaire
+      contenant les binaires pour le CPU et le GPU.
+    \end{itemize}
+  \end{exampleblock}
+
+  \begin{alertblock}{Problèmes}
+    \begin{itemize}
+  \item A l'édition des liens, des problèmes peuvent apparaître avec des templates\ldots
+  \item Problèmes d'optimisations pour le code CPU pouvant apparaître.
+    \end{itemize}
+  \end{alertblock}
+\end{frame}
+
+\begin{frame}{Compilation d'applications CUDA avec compilateur spécifique}
+
+  \begin{exampleblock}{Contenu et production du code}
+    \begin{itemize}
+    \item Codes  C/C++ (.c, .cc, .h) : On le compile avec son
+      compilateur préféré (gcc, g++, icc, \ldots);
+    \item Code Cuda : On le compile avec nvcc;
+    \item On fait l'édition de lien des objets obtenus
+    \end{itemize}
+  \end{exampleblock}
+
+  \begin{alertblock}{Problèmes}
+    \begin{itemize}
+    \item Des problèmes de nommage peuvent apparaître (mais pas avec
+      \textbf{gcc}).
+    \end{itemize}
+  \end{alertblock}
+\end{frame}
+
+\begin{frame}{Principe d'exécution}
+
+\begin{exampleblock}{Exécution d'une application CUDA}
+\begin{itemize}
+\item On lance une application CPU d'apparence classique;
+\item On réalise du ``Remote Process Control'' (RPC) sur le GPU depuis le CPU
+(exécution de ``kernels'');
+\item Pour être efficace, il faut minimiser les transferts des données;
+\item On peut exécuter les ``kernels'' en mode bloquant (synchrone) ou 
+  non bloquant (asynchrone) pour le programme CPU :
+  $\rightarrow$ possibilité d'utiliser simultanément le CPU et le GPU.
+\end{itemize}
+\end{exampleblock}
+
+
+\end{frame}
+\section{Programmation CUDA}
+
+\begin{frame}[containsverbatim]{Hardware NVIDIA Hardware et versions software}
+  
+  \begin{itemize}
+  \item Hardware versions
+    \begin{itemize}
+    \item 1.0 (Tesla S870, GeForce 8800 GTS, GTX,\ldots)
+    \item 1.1 (GeForce 8800 GT, 9500 GT, 8600 GTS,\ldots)
+    \item 1.3 (GeForce GTX 280, 260, Tesla S1070, C1060, \ldots)
+    \item 2.0 (GTX 480, 470, \ldots) $\rightarrow$ FERMI architecture
+    \end{itemize}
+  \item Software versions :
+    \begin{itemize}
+    \item 0.8, 0.9 (Early 2007)
+    \item 1.0 (June 2007)
+    \item 2.0 (August 2008, needed to support hardware above 1.1)
+    \item 2.2 (May 2009)
+    \item 3.0 (March 2010)
+    \item 3.2 (November 2010)
+    \item 4.0--Release candidate (March 2011)
+    \end{itemize}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[containsverbatim]{C étendu}
+
+  \begin{itemize}
+  \item \textbf{\textcolor{blue}{Nouv. déclarations}} : \textcolor{orange}{\small global, device, shared, local, constant}
+    \begin{lstlisting}
+      __device__ float filter[N];
+      __global__ void  convolve(float* image) {
+      __shared__ float region[M];
+      ...
+    \end{lstlisting}
+  \item \textbf{\textcolor{blue}{nouveaux mots clefs}} : 
+    \textcolor{orange}{\small threadIdx, blockIdx}
+    \begin{lstlisting}
+      region[threadIdx] = image[i];
+    \end{lstlisting}
+  \item \textbf{\textcolor{blue}{Intrinsics}} : 
+    \textcolor{orange}{\small \_\_syncthreads}
+    \begin{lstlisting}
+      __syncthreads();
+      image[j] = result;
+    }
+  \end{lstlisting}
+  \item \textbf{\textcolor{blue}{API d'exécution}} :
+    \textcolor{orange}{\small Memory, symbol, execution management}
+    \begin{lstlisting}
+      // Alloue de la memoire sur le GPU
+      void* myImg = cudaMalloc(bytes);
+    \end{lstlisting}
+  \item \textcolor{blue}{\bf Exécution de fonction}
+    \begin{lstlisting}
+      // 100 Blocs et 10 threads par bloc
+      convolve<<<100,10>>>(myImg);
+    \end{lstlisting}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{``Qualifieurs'' de CUDA}
+
+\underline{Propriétés des ``qualifieurs'' de CUDA}:
+{\scriptsize
+  \begin{tabular}{c|ccc}
+    & \textcolor{blue}{\small\texttt{\_\_device\_\_}}
+    & \textcolor{blue}{\small\texttt{\_\_host\_\_}}  
+    & \textcolor{red}{\small\texttt{\_\_global\_\_}} \\[3mm]
+    Fonctions & 
+    \begin{minipage}{25mm}
+      Appel sur \textcolor{orange}{GPU} \\
+      Exécution sur \textcolor{orange}{GPU}
+    \end{minipage} &
+    \begin{minipage}{25mm}
+      Appel sur \textcolor{blue}{CPU} \\
+      Exécution sur \textcolor{blue}{CPU}
+    \end{minipage} &
+    \begin{minipage}{25mm}
+      Appel sur \textcolor{blue}{CPU} \\
+      Exécution sur \textcolor{orange}{GPU}
+    \end{minipage} \\[2mm] \hline
+  & \textcolor{red}{\small\texttt{\_\_device\_\_}} &
+    \textcolor{blue}{\small\texttt{\_\_constant\_\_}} &
+    \textcolor{red}{\small\texttt{\_\_shared\_\_}} \\[3mm]
+  & \begin{minipage}{25mm}
+      Mémoire globale \textcolor{orange}{GPU}
+    \end{minipage}&
+    \begin{minipage}{25mm}
+      Mémoire constante \textcolor{orange}{GPU}
+    \end{minipage} &
+    \begin{minipage}{25mm}
+      Mémoire partagé multi-processeurs
+    \end{minipage} \\[5mm]
+    Variables & 
+    \begin{minipage}{25mm}
+      Temps de vie de l'application
+    \end{minipage} &
+    \begin{minipage}{25mm}
+      Temps de vie de l'application
+    \end{minipage} &
+    \begin{minipage}{25mm}
+      Temps de vie du bloc de thread
+    \end{minipage} \\[5mm]
+    & \begin{minipage}{25mm}
+      Lisible/enregistrable sur \textcolor{blue}{CPU} et \textcolor{orange}{GPU}
+    \end{minipage} &
+    \begin{minipage}{25mm}
+      Enregistrable \textcolor{blue}{CPU}, lisible \textcolor{orange}{GPU}
+    \end{minipage} &
+    \begin{minipage}{25mm}
+      Lisible sur \textcolor{orange}{GPU} : utilisé comme \textsl{cache} mémoire géré à la main
+      pour la mémoire global \textcolor{orange}{GPU}
+    \end{minipage}
+  \end{tabular}
+}
+$\rightarrow$ Les qualifieurs séparent les codes \textcolor{blue}{CPU} et \textcolor{orange}{GPU}.
+\end{frame}
+
+\begin{frame}[containsverbatim]{Distribution des threads : grilles et blocs}
+
+\begin{minipage}[c]{52mm}
+\begin{itemize}
+\item Un noyau est exécuté comme une grille de blocs de thread
+  \begin{itemize}
+  \item 
+    \textcolor{orange}{\scriptsize Tous les threads partagent le même espace de mémoire de donné}
+  \end{itemize}
+\item Un bloc de threads est un ensemble de threads qui peuvent coopérer les uns les autres en :
+  \begin{itemize}
+  \item \textcolor{orange}{\scriptsize synchronisant leur exécution}
+  \item \textcolor{orange}{\scriptsize partageant leurs données à travers une mémoire partagée rapide}
+  \end{itemize}
+\item Deux threads provenant de deux blocs différent ne peuvent pas coopérer :
+  \begin{itemize}
+  \item 
+  \textcolor{orange}{\scriptsize Opérations atomiques rajoutées depuis le hadware version HW 1.1}
+\end{itemize}
+\end{itemize}
+\end{minipage}
+\begin{minipage}[c]{53mm}
+\begin{tikzpicture}{56mm}
+\draw[fill=cyan] (0,0) rectangle (1cm,7cm);
+\node[color=black] at (2.5mm,68mm){\tiny \textbf{Host}};
+\draw[fill=green] (6mm,50mm) node[draw,fill] (K1) {\tiny
+  \begin{minipage}{6mm}Kernel\\ 1\end{minipage}};
+\draw[fill=green] (6mm,30mm) node[draw,fill] (K2) {\tiny
+  \begin{minipage}{6mm}Kernel\\ 2\end{minipage}};
+\draw[color=white,->,thick] (1mm,60mm) -- (1mm,1mm);
+
+\draw[fill=cyan] (15mm,0mm) rectangle (5cm,7cm);
+\node at (20mm,68mm){\tiny \textbf{device}};
+\draw[fill=green] (17mm,41mm) rectangle (48mm,65mm);
+\node at (25mm,62mm){\tiny \textbf{Grid 1}};
+\draw[fill=yellow] (22mm,55mm) node[draw,fill] (B00) {\tiny
+  \begin{minipage}{6mm}Block\\(0,0)\end{minipage}};
+\draw[fill=yellow] (32mm,55mm) node[draw,fill] (B10) {\tiny
+  \begin{minipage}{6mm}Block\\(1,0)\end{minipage}};
+\draw[fill=yellow] (42mm,55mm) node[draw,fill] (B20) {\tiny
+  \begin{minipage}{6mm}Block\\(2,0)\end{minipage}};
+
+\draw[fill=yellow] (22mm,46mm) node[draw,fill] (B01) {\tiny
+  \begin{minipage}{6mm}Block\\(0,1)\end{minipage}};
+\draw[fill=yellow] (32mm,46mm) node[draw,fill] (B11) {\tiny
+  \begin{minipage}{6mm}Block\\(1,1)\end{minipage}};
+\draw[fill=yellow] (42mm,46mm) node[draw,fill] (B21) {\tiny
+  \begin{minipage}{6mm}Block\\(2,1)\end{minipage}};
+\draw[thick, ->] (K1) -- (17mm,50mm);
+
+
+\draw[fill=green] (21mm,11mm) rectangle (44mm,40mm);
+\node at (29mm,38mm){\tiny \textbf{Grid 2}};
+
+\draw[fill=yellow] (26mm,30mm) node[draw,fill] {\tiny
+  \begin{minipage}{6mm}Block\\(0,0)\end{minipage}};
+\draw[fill=yellow] (36mm,30mm) node[draw,fill] {\tiny
+  \begin{minipage}{6mm}Block\\(1,0)\end{minipage}};
+\draw[thick,->] (K2) -- (21mm,30mm);
+
+\draw[thick,dashed] (27.7mm,42.5mm) -- (6.8mm,2.5mm);
+\draw[thick,dashed] (36mm  ,42.5mm) -- (56mm,2.5mm);
+\draw[thick,dashed] (27.7mm,49.5mm) -- (6.8mm,32mm);
+\draw[thick,dashed] (36mm  ,49.5mm) -- (56mm,32mm);
+
+
+
+\draw[fill=yellow, fill opacity=0.7] 
+  (6.8mm,2.5mm) rectangle (56mm,32mm);
+\node at (14mm,29mm) {\tiny Block (1,1)};
+\matrix[fill=red,matrix anchor=south west,nodes=draw] at (13mm,3mm) {
+\node{\begin{minipage}{6mm}\tiny Thread (0,0)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Thread (1,0)\end{minipage}};  && 
+\node{\begin{minipage}{6mm}\tiny Thread (2,0)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Thread (3,0)\end{minipage}};  \\
+\node{\begin{minipage}{6mm}\tiny Thread (0,1)\end{minipage}};  && 
+\node{\begin{minipage}{6mm}\tiny Thread (1,1)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Thread (2,1)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Thread (3,1)\end{minipage}};  \\
+\node{\begin{minipage}{6mm}\tiny Thread (0,2)\end{minipage}};  && 
+\node{\begin{minipage}{6mm}\tiny Thread (1,2)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Thread (2,2)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Thread (3,2)\end{minipage}};  \\ 
+};
+
+%\draw[step=0.1cm,color=gray] (0,0) grid (5cm,7cm);
+%\draw[step=0.5cm] (0,0) grid (5cm,7cm);
+
+\end{tikzpicture}
+\end{minipage}
+\end{frame}
+
+\begin{frame}[containsverbatim]{Identification des blocs et des threads}
+
+\begin{minipage}{5cm}
+\begin{itemize}
+\item Chaque thread et bloc ont des Ids :
+  \begin{itemize}
+  \item \textcolor{orange}{Chaque thread peut décider sur quelles données travailler}
+  \item \textcolor{orange}{Block ID} : 1D, 2D ou 3D depuis Cuda 3.0
+  \item \textcolor{orange}{Thread ID}: 1D, 2D or 3D.
+  \end{itemize}
+\item Simplifie l'adressage mémoire quand on gère des données multidimensionnelles :
+  \begin{itemize}
+    \item \textcolor{orange}{Image processing}
+    \item \textcolor{orange}{Résolution d'EDP sur des volumes ou surfaces}
+    \item \ldots
+  \end{itemize}
+\end{itemize}
+\end{minipage}
+\begin{minipage}[c]{55mm}
+\begin{tikzpicture}{56mm}
+\draw[fill=cyan] (15mm,0mm) rectangle (5cm,7cm);
+\node at (20mm,68mm){\tiny \textbf{device}};
+\draw[fill=green] (17mm,41mm) rectangle (48mm,65mm);
+\node at (25mm,62mm){\tiny \textbf{Grid 1}};
+\draw[fill=yellow] (22mm,55mm) node[draw,fill] (B00) {\tiny
+  \begin{minipage}{6mm}Block\\(0,0)\end{minipage}};
+\draw[fill=yellow] (32mm,55mm) node[draw,fill] (B10) {\tiny
+  \begin{minipage}{6mm}Block\\(1,0)\end{minipage}};
+\draw[fill=yellow] (42mm,55mm) node[draw,fill] (B20) {\tiny
+  \begin{minipage}{6mm}Block\\(2,0)\end{minipage}};
+
+\draw[fill=yellow] (22mm,46mm) node[draw,fill] (B01) {\tiny
+  \begin{minipage}{6mm}Block\\(0,1)\end{minipage}};
+\draw[fill=yellow] (32mm,46mm) node[draw,fill] (B11) {\tiny
+  \begin{minipage}{6mm}Block\\(1,1)\end{minipage}};
+\draw[fill=yellow] (42mm,46mm) node[draw,fill] (B21) {\tiny
+  \begin{minipage}{6mm}Block\\(2,1)\end{minipage}};
+
+\draw[thick,dashed] (27.7mm,42.5mm) -- (6.8mm,2.5mm);
+\draw[thick,dashed] (36mm  ,42.5mm) -- (56mm,2.5mm);
+\draw[thick,dashed] (27.7mm,49.5mm) -- (6.8mm,32mm);
+\draw[thick,dashed] (36mm  ,49.5mm) -- (56mm,32mm);
+
+\draw[fill=yellow, fill opacity=0.7] 
+  (6.8mm,2.5mm) rectangle (56mm,32mm);
+\node at (14mm,29mm) {\tiny Block (1,1)};
+\matrix[fill=red,matrix anchor=south west,nodes=draw] at (13mm,3mm) {
+\node{\begin{minipage}{6mm}\tiny Thread (0,0)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Thread (1,0)\end{minipage}};  && 
+\node{\begin{minipage}{6mm}\tiny Thread (2,0)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Thread (3,0)\end{minipage}};  \\
+\node{\begin{minipage}{6mm}\tiny Thread (0,1)\end{minipage}};  && 
+\node{\begin{minipage}{6mm}\tiny Thread (1,1)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Thread (2,1)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Thread (3,1)\end{minipage}};  \\
+\node{\begin{minipage}{6mm}\tiny Thread (0,2)\end{minipage}};  && 
+\node{\begin{minipage}{6mm}\tiny Thread (1,2)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Thread (2,2)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Thread (3,2)\end{minipage}};  \\ 
+};
+
+\end{tikzpicture}
+\end{minipage}
+\end{frame}
+
+
+\begin{frame}[containsverbatim]{Mots clefs pour les blocs et les threads}
+\begin{minipage}{5cm}
+\begin{itemize}
+\item \textcolor{blue}{Mots clefs pour les blocs} :
+  \begin{itemize}
+  \item \textcolor{orange}{threadId.[x,y,z]} définie la position du thread dans le bloc;
+  \item \textcolor{orange}{blockDim.[x,y,z]} définie les dimensions du bloc.
+  \end{itemize}
+\item \textcolor{blue}{Mots clefs pour les grilles} :
+  \begin{itemize}
+  \item \textcolor{orange}{blockId.[x,y,z]} définie la position du bloc dans la grille
+  \item \textcolor{orange}{gridDim.[x,y,z]} définie les dimensions de la grille
+  \end{itemize}
+\end{itemize}
+\end{minipage}
+\begin{minipage}[c]{55mm}
+\begin{tikzpicture}{56mm}
+\draw[fill=yellow] (0mm,70mm) rectangle (50mm,42mm);
+
+\matrix[fill=red,matrix anchor=south west,draw,nodes=draw] at (12mm,49mm) {
+\node{\begin{minipage}{6mm}\tiny $T_{000}$\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny $T_{100}$\end{minipage}};  && 
+\node{\begin{minipage}{6mm}\tiny $T_{200}$\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny $T_{300}$\end{minipage}};  \\
+\node{\begin{minipage}{6mm}\tiny $T_{010}$\end{minipage}};  && 
+\node{\begin{minipage}{6mm}\tiny $T_{110}$\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny $T_{210}$\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny $T_{310}$\end{minipage}};  \\
+\node{\begin{minipage}{6mm}\tiny $T_{020}$\end{minipage}};  && 
+\node{\begin{minipage}{6mm}\tiny $T_{120}$\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny $T_{220}$\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny $T_{320}$\end{minipage}};  \\ 
+};
+
+
+\matrix[fill=red,matrix anchor=south west,draw,nodes=draw] at (6mm,43mm) {
+\node{\begin{minipage}{6mm}\tiny $T_{001}$\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny $T_{101}$\end{minipage}};  && 
+\node{\begin{minipage}{6mm}\tiny $T_{201}$\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny $T_{301}$\end{minipage}};  \\
+\node{\begin{minipage}{6mm}\tiny $T_{011}$\end{minipage}};  && 
+\node{\begin{minipage}{6mm}\tiny $T_{111}$\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny $T_{211}$\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny $T_{311}$\end{minipage}};  \\
+\node{\begin{minipage}{6mm}\tiny $T_{021}$\end{minipage}};  && 
+\node{\begin{minipage}{6mm}\tiny $T_{121}$\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny $T_{221}$\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny $T_{321}$\end{minipage}};  \\ 
+};
+\draw[<->,thick] (12mm,67mm) -- node[above]{\tiny blockDim.x} (49.5mm,67mm);
+\draw[<->,thick] (4mm,43mm) -- node[above,sloped]{\tiny blockDim.y} (4mm,60mm);
+\draw[<->,thick] (6mm,60mm) -- node[above,sloped]{\tiny blockDim.z} (12mm,67mm);
+\node at (4.5mm,69mm) {\tiny Block 1,1};
+
+\draw[fill=green ] (0mm,0mm)  rectangle (50mm,38mm);
+\matrix[fill=yellow,matrix anchor=south west,draw,nodes=draw] at (6mm,10mm) {
+\node{\begin{minipage}{6mm}\tiny Block (0,0)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Block (1,0)\end{minipage}};  && 
+\node{\begin{minipage}{6mm}\tiny Block (2,0)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Block (3,0)\end{minipage}};  \\
+\node{\begin{minipage}{6mm}\tiny Block (0,1)\end{minipage}};  && 
+\node{\begin{minipage}{6mm}\tiny Block (1,1)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Block (2,1)\end{minipage}};  &&
+\node{\begin{minipage}{6mm}\tiny Block (3,1)\end{minipage}};  \\
+};
+\draw[<->,thick] (6mm,28mm) -- node[above]{\tiny gridDim.x} (43.5mm,28mm);
+\draw[<->,thick] (4mm,10mm) -- node[above,sloped]{\tiny gridDim.y} (4mm,27mm);
+\node at (5mm,35mm) {\tiny Grid 1};
+%\draw[step=0.1cm,color=gray!50!white] (0,0) grid (5cm,7cm);
+%\draw[step=0.5cm,color=gray] (0,0) grid (5cm,7cm);
+
+\end{tikzpicture}
+\end{minipage}
+\end{frame}
+
+\section{CUDA API}
+
+\begin{frame}{Caractéristiques de CUDA : facile et léger}
+\begin{itemize}
+\item L'API est une extension du langage C 
+  \textcolor{green}{$\rightarrow$} apprentissage aisé;
+\item Le hardware est conçu pour une exécution et une gestion des
+tâches légère \textcolor{green}{$\rightarrow$} performance élevée.
+\end{itemize}
+\end{frame}
+
+\begin{frame}[containsverbatim]{Allocation mémoire}
+\begin{itemize}
+\item \textcolor{blue}{\texttt{cudaMalloc()}}
+  \begin{itemize}
+  \item Alloue des objets sur la \textbf{mémoire globale} du GPU
+  \item Deux paramêtres nécessaires :
+    \begin{enumerate}
+    \item Adresse du pointeur sur l'objet alloué;
+    \item Taille de l'objet alloué;
+    \end{enumerate}
+  \end{itemize}
+\item \textcolor{blue}{cudaFree()}
+  \begin{itemize}
+  \item Libère des objets de la mémoire global du GPU;
+    \begin{enumerate}
+    \item Pointeur sur l'objet à libérer;
+    \end{enumerate}
+  \end{itemize}
+\end{itemize}
+
+\begin{exampleblock}{Ex.: Alloue une matrice 1024*1024 en simple précision}
+    \begin{lstlisting}
+#define MATRIX_SIZE 1024*1024
+float* MyMatrixOnDevice;
+int size = MATRIX_SIZE*sizeof(float);
+cudaMalloc((void**)&MyMatrixOnDevice, size);
+cudaFree(MyMatrixOnDevice);
+    \end{lstlisting}
+\end{exampleblock}
+\end{frame}
+
+\begin{frame}{Transfert de données en CUDA entre le CPU et le GPU}
+
+\textcolor{blue}{\Large\tt cudaMemcpy()}
+\begin{itemize}
+\item Transfert de données
+\item Quatre paramêtres nécessaires :
+  \begin{itemize}
+  \item Pointeur vers la source
+  \item Pointeur vers la destination
+  \item Nombre d'octets à copier
+  \item Type de transfert :
+    \begin{itemize}
+    \item \textcolor{orange}{CPU vers CPU}
+    \item \textcolor{orange}{CPU vers GPU}
+    \item \textcolor{orange}{GPU vers CPU}
+    \item \textcolor{orange}{GPU vers GPU}
+    \end{itemize}
+  \end{itemize}
+\end{itemize}
+Des variantes asynchrones supportées depuis la version hardware 1.1HW
+\end{frame}
+
+\begin{frame}[containsverbatim]{Exemples de transfert CUDA entre le CPU et le GPU}
+\begin{itemize}
+\item \underline{Example de code} :
+  \begin{itemize}
+  \item \textcolor{orange}{Transfert une matrice 1024*1024 en simple précision}
+  \item \textcolor{orange}{\texttt{MyMatrixOnHost} est un pointeur sur la mémoire du CPU
+      et \texttt{MyMatrixOnDevice} est un pointeur sur la mémoire globale du GPU}
+  \item \textcolor{orange}{\texttt{cudaMemcpyHostToDevice} et
+      \texttt{cudaMemcpyDeviceToHost} sont des constantes symboliques}
+  \end{itemize}
+\end{itemize}
+\begin{lstlisting}
+cudaMemcpy(MyMatrixOnDevice, MyMatrixOnHost, size,
+           cudaMemcpyHostToDevice);
+cudaMemcpy(MyMatrixOnHost, MyMatrixOnDevice, size,
+           cudaMemcpyDeviceToHost);
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}{Déclaration de fonctions CUDA}
+
+  \begin{tabular}{|c|c|c|}\hline
+ & \begin{minipage}{2cm}\small Exécuté sur :\end{minipage} & 
+ \begin{minipage}{2cm}\small Appelable seulement de :\end{minipage} \\ \hline \hline
+\texttt{\textcolor{blue}{\_\_device\_\_} float DeviceFunc()} &
+GPU & GPU \\ \hline
+\texttt{\textcolor{blue}{\_\_global\_\_} void KernelFunc()} &
+GPU & CPU \\ \hline
+\texttt{\textcolor{blue}{\_\_host\_\_} float HostFunc()} & host & host \\
+\hline
+\end{tabular}
+
+\begin{itemize}
+\item \texttt{\textcolor{blue}{\_\_global\_\_}} définie une fonction noyau :
+doit retourner toujours \textcolor{blue}{\tt void}.
+\item \textcolor{blue}{\tt \_\_device\_\_} fonctions sur GPU dont on ne peut
+récupérer l'adresse (semblable à des fonctions inline);
+\item Pour les fonctions exécutées sur le GPU :
+  \begin{itemize}
+  \item \textcolor{orange}{Pas de fonctions récursives}
+  \item \textcolor{orange}{Pas de déclaration de variables statiques dans la fonction}
+  \item \textcolor{orange}{Pas de nombre d'arguments variables}
+  \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[containsverbatim]{Appeler un noyau : création de threads}
+
+\begin{itemize}
+\item Une fonction noyau doit être appelée avec une configuration d'exécution :
+\begin{lstlisting}
+__global__ void KernelFunc(...);
+dim3 DimGrid(100,50);  // 5000 Thread blocks
+dim3 DimBlock(8,8,4);  // 256 threads per block
+
+KernelFunc<<<DimGrid, DimBlock>>>(...);
+\end{lstlisting}
+\item Tout appel à un noyau est asynchrone, une synchronisation
+  explicite nécessaire pour des rendez-vous.
+\end{itemize}
+\end{frame}
+
+\begin{frame}[containsverbatim]{Compilation}
+
+\begin{center}
+\begin{tikzpicture}
+\draw[fill=cyan!50!white] (0mm,35mm) rectangle (90mm,70mm);
+\node at (60mm,65mm) {Virtuel};
+\node[fill=blue!30!white,draw] at (30mm, 65mm) (App) {\begin{minipage}{18mm}\scriptsize\centering
+    C/C++ Cuda Application\end{minipage}};
+\node[fill=green!90!blue,ellipse,draw] at (30mm,50mm) (Nvcc) {\scriptsize NVCC};
+\node[fill=cyan!90!blue,draw] at (30mm,38mm) (ptx) {\scriptsize PTX Code};
+\node[fill=cyan!90!blue,draw] at (70mm,50mm) (cpucode) {\scriptsize CPU Code};
+
+\draw[fill=cyan!80!white] (0mm,0mm) rectangle (90mm,30mm);
+\node at (60mm,25mm) {Physique};
+\node[fill=green!90!blue,ellipse,draw] at (30mm,20mm) (tgtComp) {\begin{minipage}{18mm}\scriptsize\centering
+    PTX Code to Target Compiler\end{minipage}};
+\node[fill=blue!30!white,draw] at (20mm,6mm) (gt200) {\scriptsize GT 200};
+\node[fill=blue!30!white,draw] at (30mm,6mm) (other) {\scriptsize ...};
+\node[fill=blue!30!white,draw] at (40mm,6mm) (gpu) {\scriptsize GPU};
+
+\draw[->,thick] (App) -- (Nvcc);
+\draw[->,thick] (Nvcc) -- (ptx);
+\draw[->,thick] (Nvcc) -- (cpucode);
+\draw[->,thick] (ptx) -- (tgtComp);
+\draw[->,thick] (tgtComp) -- (gt200);
+\draw[->,thick] (tgtComp) -- (other);
+\draw[->,thick] (tgtComp) -- (gpu);
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+\begin{frame}{\'Edition de lien}
+
+  Tout exécutable avec CUDA utilise deux librairies dynamiques :
+  \begin{enumerate}
+  \item La librairie d'exécution (\texttt{cudart})
+  \item La librairie du driver (\texttt{cuda})
+  \end{enumerate}
+\end{frame}
+
+\begin{frame}{Débogage : -- mode d'émulation du GPU}
+
+  \begin{itemize}
+  \item Un exécutable est compilé dans un mode d'émulation du GPU
+    (\texttt{nvcc -deviceemu}) s'exécute complètement sur le CPU en utilisant le modèle
+    d'exécution CUDA :
+    \begin{itemize}
+    \item Pas besoin de GPU ou du driver CUDA;
+    \item Chaque thread du GPU est émulé à l'aide d'un thread CPU.
+    \end{itemize}
+  \item Quand on exécute en mode émulation, on peut :
+    \begin{itemize}
+    \item Utilisé un débogueur natif (points d'arrêts, inspection, etc.)
+    \item Accéder aux données spécifiques du GPU à partir du CPU et vice--versa
+    \item Appeler toute fonction du CPU à partir du noyau (exemple : \texttt{printf})
+      et vice--versa,
+    \item Détecter les situations de blocage causées par l'usage impropre de
+      \texttt{\_\_syncthreads}.
+    \end{itemize}
+  \end{itemize}
+
+\end{frame}
+
+\begin{frame}{Problèmes dûs au mode émulation}
+
+\begin{itemize}
+\item Les threads GPU en émulation s'exécutent séquentiellement, ainsi l'accès simultané de la même adresse mémoire
+  par de multiples threads peut produire un résultat différent;
+\item Déférencer un pointeur GPU sur le CPU ou un pointeur CPU sur le GPU
+  peut produire des résultats corrects en mode émulation, mais devrait
+  générer une erreur en mode normal;
+\item Les résultats de calcul en virgule flottante peuvent légèrement différer, car :
+  \begin{itemize}
+  \item Des sorties différentes pour le compilateur, pas les mêmes instructions
+  \item Utilisation d'une précision étendue sur CPU pour les résultats intermédiaires :
+    Il existe diverses options pour forcer une simple précision sur le CPU.
+  \end{itemize}
+\end{itemize}
+\end{frame}
+
+\section{Optimisation sur le GPU}
+
+\begin{frame}{Performance des noyaux CUDA}
+
+\begin{center}\Large
+Construction efficace d'une application CUDA
+\end{center}
+
+\begin{itemize}
+\item Noyaux CUDA et les threads
+\item Les warps CUDA
+\item Mémoire : Alignement des données \& coalescence
+\item Mémoire : texture and mémoire constante
+\item Mémoire partagée
+\item Taille des blocs
+\item Occupation
+\item Outils de performance
+\end{itemize}
+\end{frame}
+
+\subsection{Noyaux CUDA et les threads}
+
+\begin{frame}{Noyaux CUDA et les  threads}
+\begin{itemize}
+\item Des portions parallèles d'une application sont exécutée sur le GPU 
+  comme des noyaux :
+  \begin{itemize}
+  \item Un seul noyau exécuté à la fois jusqu'à CUDA 4.0
+  \item Plusieurs threads exécutent les noyaux;
+  \end{itemize}
+\item Différences entre des threads CUDA et des threads CPU :
+  \begin{itemize}
+  \item Les threads CUDA sont extrémement légers :
+    \begin{itemize}
+    \item Création peu coûteuse;
+    \item Basculement entre threads instantanné
+    \end{itemize}
+  \item CUDA utilise plus de 1000 threads pour être efficace
+    \begin{itemize}
+    \item CPUs en utilise peu
+    \end{itemize}
+  \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[containsverbatim]{Tableau de threads}
+
+Un noyau CUDA est exécuté par un tableau de threads
+\begin{itemize}
+\item Tous les threads exécutent le même code
+\item Chaque thread a un ID utilisé pour calculer les adresses mémoires
+  et faire des contrôles pour le branchement (if, etc...)
+\end{itemize}
+
+\begin{tikzpicture}
+\matrix[matrix anchor=south west,nodes=draw] at (0mm,2cm) {
+\node[fill=green!90!blue,text height=10pt] (n1) {1}; & 
+\node[fill=green!90!blue,text height=10pt] (n2) {2}; & 
+\node[fill=green!90!blue,text height=10pt] (n3) {3}; & 
+\node[fill=green!90!blue,text height=10pt] (n4) {4}; & 
+\node[fill=green!90!blue,text height=10pt] (n5) {5}; & 
+\node[fill=green!90!blue,text height=10pt] (n6) {6}; \\
+};
+
+\node[anchor=south west] at (0mm,0cm) {
+  \begin{lstlisting}
+    float x = input[threadId];
+    float y = func(x);
+    output[threadId] = y;
+  \end{lstlisting}
+};
+
+\draw[->,decorate, decoration=snake] (n1.south) -- +(7.5mm,-7.5mm);
+\draw[->,decorate, decoration=snake] (n2.south) -- +(7.5mm,-7.5mm);
+\draw[->,decorate, decoration=snake] (n3.south) -- +(7.5mm,-7.5mm);
+\draw[->,decorate, decoration=snake] (n4.south) -- +(7.5mm,-7.5mm);
+\draw[->,decorate, decoration=snake] (n5.south) -- +(7.5mm,-7.5mm);
+\draw[->,decorate, decoration=snake] (n6.south) -- +(7.5mm,-7.5mm);
+
+\matrix[matrix anchor=south west,nodes=draw] at (13mm,-13mm) {
+\node[fill=orange!90!blue,text height=10pt] (m1) {1}; & 
+\node[fill=orange!90!blue,text height=10pt] (m2) {2}; & 
+\node[fill=orange!90!blue,text height=10pt] (m3) {3}; & 
+\node[fill=orange!90!blue,text height=10pt] (m4) {4}; & 
+\node[fill=orange!90!blue,text height=10pt] (m5) {5}; & 
+\node[fill=orange!90!blue,text height=10pt] (m6) {6}; \\
+};
+
+\draw[<-,decorate, decoration=snake] (m1.north) -- +(-7.5mm,7.5mm);
+\draw[<-,decorate, decoration=snake] (m2.north) -- +(-7.5mm,7.5mm);
+\draw[<-,decorate, decoration=snake] (m3.north) -- +(-7.5mm,7.5mm);
+\draw[<-,decorate, decoration=snake] (m4.north) -- +(-7.5mm,7.5mm);
+\draw[<-,decorate, decoration=snake] (m5.north) -- +(-7.5mm,7.5mm);
+\draw[<-,decorate, decoration=snake] (m6.north) -- +(-7.5mm,7.5mm);
+
+\end{tikzpicture}
+\end{frame}
+
+\begin{frame}[containsverbatim]{Thread ID}
+
+L'ID d'un thread dans un bloc est :
+\begin{lstlisting}
+t_id = threadIdx.x + 
+       threadIdx.y*(blockDim.x) + 
+       threadIdx.z*(blockDim.x*blockDim.y);
+\end{lstlisting}
+
+\begin{itemize}
+\item \textcolor{orange}{\texttt{threadIdx.[x,y,z]}} : Indice du thread dans la dimension x,y,z
+\item \textcolor{orange}{\texttt{blockDim.[x,y,z]}}  : Taille du bloc dans la dimension x,y,z
+\end{itemize}
+\end{frame}
+
+\begin{frame}[containsverbatim]{Thread ID(2)}
+\begin{itemize}
+\item Considérons un bloc de dimension
+\begin{lstlisting}
+blockDim.x = 8
+blockDim.y = 6
+blockDim.z = 4
+\end{lstlisting}
+\item Et un thread d'indices
+\begin{lstlisting}
+threadIdx.x = 1
+threadIdx.y = 2
+threadIdx.z = 3
+\end{lstlisting}
+\item Le thread est alors d'indice global
+\begin{lstlisting}
+1+(2*8)+3*(6*8) = 161
+\end{lstlisting}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[containsverbatim]{Exemple : Addition basique 2D sur un bloc}
+
+{\scriptsize
+\begin{lstlisting}
+__global__ void addMatrix(float* A, float* B, float* C, int N) {
+  unsigned int iBlk= blockIdx.x + blockIdx.y*gridDim.x;
+  unsigned int ind = threadIdx.x + threadIdx.y*blockDim.x +
+                     iBlk*blockDim.x*blockDim.y;
+  if ((threadIdx.x<N)&&(threadIdx.y<N)) C[ind] = A[ind] + B[ind];
+}
+void addMat(float* A, float* B, float* C, int N) {
+  int grdSize, blockSize = 16;
+  float *Adev, *Bdev, *Cdev;
+  // Alloue et copie les matrices A,B et C sur le GPU
+  cudaMalloc(((void**)&Adev, sizeof(float)*N*N);
+  cudaMemcpy(Adev, A, sizeof(float)*N*N, cudaMemcpyHostToDevice);
+  cudaMalloc(((void**)&Bdev, sizeof(float)*N*N);
+  cudaMemcpy(Bdev, B, sizeof(float)*N*N, cudaMemcpyHostToDevice);
+  cudaMalloc(((void**)&Cdev, sizeof(float)*N*N);
+  cudaMemcpy(Cdev, C, sizeof(float)*N*N, cudaMemcpyHostToDevice);
+  // Calcule la configuration d'execution du noyau
+  dim3 dimBlock(blockSize, blockSize);
+  grdSize = (N%blockSize>0 ? N/blockSize+1, N/blockSize);
+  dim3 dimGrid(grdSize,grdSize);
+  addMatrix<<<dimGrid,dimBlock>>>(Adev,Bdev,Cdev,N);
+  // Copie le resultat sur le CPU et libere la memoire GPU
+  cudaMemcpy(C, Cdev, sizeof(float)*N*N, cudaMemcpyDeviceToHost);
+  cudaFree(Adev); cudaFree(Bdev); cudaFree(Cdev);  
+}
+\end{lstlisting}
+}
+\end{frame}
+
+\subsection{Warps Cuda}
+
+\begin{frame}{Warps}
+
+\begin{itemize}
+\item Chaque bloc de threads est segmenté en warps
+\item Chaque warp contient le même nombre de threads (32)
+\item Chaque warp contient des threads consécutifs,le premier
+  warp contenant le thread num. 0
+\item Chaque warp est exécuté par un multiprocesseur d'une façon
+  purement SIMD
+\item Des branchements divergents cause une sérialisation du warp :
+  \begin{itemize}
+  \item Si tous les threads dans le warp prennent la même branche, pas de coûts supplémentaires
+  \item Si chaque thread prend un ou deux branchements différents, le warp entier
+    paye le coût des deux branchements
+  \item Si les threads prennent $n$ branchement différents, le warp entier
+    paye la somme du coût des $n$ branchements.
+  \end{itemize}
+\item La mémoire partagée est accédée en demi-warp jusqu'au hardware
+  1.X et par warp entier à partir des version 2.0.
+\end{itemize}
+\end{frame}
+
+\subsection{Mémoire : alignement des données et coalescence}
+
+  
+\begin{frame}[containsverbatim]{Coalescence 1.0/1.1}
+
+  \begin{itemize}
+  \item Une lecture simultanée par demi-warp (16 threads)
+  \item Une région continue de la mémoire globale
+    \begin{itemize}
+    \item \textcolor{orange}{\textbf{64} octets} : chaque thread lit un mot  (\textbf{int},\textbf{float},\ldots);
+    \item \textcolor{orange}{\textbf{128} octets}: chaque thread lit un double mot (\textbf{float2}, \textbf{int2},\ldots)
+    \item \textcolor{orange}{\textbf{256} bytes}: chaque thread lit un quad-mot (\textbf{float4}, \textbf{int4},\ldots).
+    \end{itemize}
+  \item Restrictions supplémentaires sur les architectures  G8x/G9x :
+    \begin{itemize}
+    \item L'adresse de début pour une région doit être un multiple de la taille de la région
+    \item Le $k^{e}$ thread dans un demi-warp doit accéder au 
+      $k^{e}$ élément dans un bloc étant lu
+    \end{itemize}
+  \item Exception : Pas tous les threads doivent participer
+    \begin{itemize}
+    \item Accés prédit, divergence dans un demi-warp
+    \end{itemize}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Accès Coalescent 1.0/1.1 : lecture de floats}
+
+\begin{center}
+\begin{tikzpicture}
+\draw[xstep=5mm,ystep=0.25cm] (1.1cm,9.9mm) grid (3.9cm,12.51mm);
+\draw (3.9cm,9.9mm) -- (7.9cm,9.9mm) (3.9cm,12.5mm) -- (7.9cm,12.5mm);
+\draw[xstep=5mm,ystep=0.25cm] (7.9cm,9.9mm) grid (9.9cm,12.51mm);
+\draw (1.5cm,9.2mm) node{\tiny\bf 128}
+      (2.0cm,9.2mm) node{\tiny\bf 132}
+      (2.5cm,9.2mm) node{\tiny\bf 136}
+      (3.0cm,9.2mm) node{\tiny\bf 140}
+      (3.5cm,9.2mm) node{\tiny\bf 144}
+      (8.0cm,9.2mm) node{\tiny\bf 184}
+      (8.5cm,9.2mm) node{\tiny\bf 188}
+      (9.0cm,9.2mm) node{\tiny\bf 192};
+\draw (1.75cm,2cm) node (t0) {\tiny\bf $t_{0}$}
+      (2.25cm,2cm) node (t1) {\tiny\bf $t_{1}$}
+      (2.75cm,2cm) node (t2) {\tiny\bf $t_{2}$}
+      (3.25cm,2cm) node (t3) {\tiny\bf $t_{3}$}
+      (8.25cm,2cm) node (t14) {\tiny\bf $t_{14}$}
+      (8.75cm,2cm) node (t15) {\tiny\bf $t_{15}$};
+\draw[->, blue, thick] (t0.south) -- +(0cm,-5mm);
+\draw[->, blue, thick] (t3.south) -- +(0cm,-5mm);
+\draw[->, blue, thick] (t14.south) -- +(0cm,-5mm);
+\draw[->, blue, thick] (t15.south) -- +(0cm,-5mm);
+\draw (2.25cm,1.6cm) node{\small\color{red}{X}};
+\draw (2.75cm,1.6cm) node{\small\color{red}{X}};
+\draw[color=green!60!black] (5cm,5mm) node {Plusieurs threads ne participent pas};
+
+\draw[xstep=5mm,ystep=0.25cm] (1.1cm,39.9mm) grid (3.9cm,42.51mm);
+\draw (3.9cm,39.9mm) -- (7.9cm,39.9mm) (3.9cm,42.5mm) -- (7.9cm,42.5mm);
+\draw[xstep=5mm,ystep=0.25cm] (7.9cm,39.9mm) grid (9.9cm,42.51mm);
+\draw (1.5cm,39.2mm) node{\tiny\bf 128}
+      (2.0cm,39.2mm) node{\tiny\bf 132}
+      (2.5cm,39.2mm) node{\tiny\bf 136}
+      (3.0cm,39.2mm) node{\tiny\bf 140}
+      (3.5cm,39.2mm) node{\tiny\bf 144}
+      (8.0cm,39.2mm) node{\tiny\bf 184}
+      (8.5cm,39.2mm) node{\tiny\bf 188}
+      (9.0cm,39.2mm) node{\tiny\bf 192};
+\draw (1.75cm,5cm) node (t0) {\tiny\bf $t_{0}$}
+      (2.25cm,5cm) node (t1) {\tiny\bf $t_{1}$}
+      (2.75cm,5cm) node (t2) {\tiny\bf $t_{2}$}
+      (3.25cm,5cm) node (t3) {\tiny\bf $t_{3}$}
+      (8.25cm,5cm) node (t14) {\tiny\bf $t_{14}$}
+      (8.75cm,5cm) node (t15) {\tiny\bf $t_{15}$};
+\draw[->, blue, thick] (t0.south) -- +(0cm,-5mm);
+\draw[->, blue, thick] (t1.south) -- +(0cm,-5mm);
+\draw[->, blue, thick] (t2.south) -- +(0cm,-5mm);
+\draw[->, blue, thick] (t3.south) -- +(0cm,-5mm);
+\draw[->, blue, thick] (t14.south) -- +(0cm,-5mm);
+\draw[->, blue, thick] (t15.south) -- +(0cm,-5mm);
+\draw[color=green!60!black] (5cm,35mm) node {Tous les threads participent};
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+\begin{frame}{Accès non coalescent 1.0/1.1 : Lecture de floats}
+
+\begin{center}
+\begin{tikzpicture}
+\draw[xstep=5mm,ystep=0.25cm] (1.1cm,9.9mm) grid (3.9cm,12.51mm);
+\draw (3.9cm,9.9mm) -- (7.9cm,9.9mm) (3.9cm,12.5mm) -- (7.9cm,12.5mm);
+\draw[xstep=5mm,ystep=0.25cm] (7.9cm,9.9mm) grid (9.9cm,12.51mm);
+\draw (1.5cm,9.2mm) node{\tiny\bf 128}
+      (2.0cm,9.2mm) node{\tiny\bf \textcolor{red}{132}}
+      (2.5cm,9.2mm) node{\tiny\bf 136}
+      (3.0cm,9.2mm) node{\tiny\bf 140}
+      (3.5cm,9.2mm) node{\tiny\bf 144}
+      (8.0cm,9.2mm) node{\tiny\bf 184}
+      (8.5cm,9.2mm) node{\tiny\bf 188}
+      (9.0cm,9.2mm) node{\tiny\bf 192};
+\draw (1.75cm,2cm) node (t0) {\tiny\bf $t_{0}$}
+      (2.25cm,2cm) node (t1) {\tiny\bf $t_{1}$}
+      (2.75cm,2cm) node (t2) {\tiny\bf $t_{2}$}
+      (3.25cm,2cm) node (t3) {\tiny\bf $t_{3}$}
+      (8.25cm,2cm) node (t14) {\tiny\bf $t_{14}$}
+      (8.75cm,2cm) node (t15) {\tiny\bf $t_{15}$};
+\draw[->, blue, thick] (t0.south) -- +(5mm,-5mm);
+\draw[->, blue, thick] (t1.south) -- +(5mm,-5mm);
+\draw[->, blue, thick] (t2.south) -- +(5mm,-5mm);
+\draw[->, blue, thick] (t3.south) -- +(5mm,-5mm);
+\draw[->, blue, thick] (t14.south) -- +(5mm,-5mm);
+\draw[->, blue, thick] (t15.south) -- +(5mm,-5mm);
+\draw[color=green!60!black] (5cm,5mm) node {Adresse de début non alignée (pas un
+multiple de 64)};
+
+\draw[xstep=5mm,ystep=0.25cm] (1.1cm,39.9mm) grid (3.9cm,42.51mm);
+\draw (3.9cm,39.9mm) -- (7.9cm,39.9mm) (3.9cm,42.5mm) -- (7.9cm,42.5mm);
+\draw[xstep=5mm,ystep=0.25cm] (7.9cm,39.9mm) grid (9.9cm,42.51mm);
+\draw (1.5cm,39.2mm) node{\tiny\bf 128}
+      (2.0cm,39.2mm) node{\tiny\bf 132}
+      (2.5cm,39.2mm) node{\tiny\bf 136}
+      (3.0cm,39.2mm) node{\tiny\bf 140}
+      (3.5cm,39.2mm) node{\tiny\bf 144}
+      (8.0cm,39.2mm) node{\tiny\bf 184}
+      (8.5cm,39.2mm) node{\tiny\bf 188}
+      (9.0cm,39.2mm) node{\tiny\bf 192};
+\draw (1.75cm,5cm) node (t0) {\tiny\bf $t_{0}$}
+      (2.25cm,5cm) node (t1) {\tiny\bf $t_{1}$}
+      (2.75cm,5cm) node (t2) {\tiny\bf $t_{2}$}
+      (3.25cm,5cm) node (t3) {\tiny\bf $t_{3}$}
+      (8.25cm,5cm) node (t14) {\tiny\bf $t_{14}$}
+      (8.75cm,5cm) node (t15) {\tiny\bf $t_{15}$};
+\draw[->, blue, thick] (t0.south) -- +(0cm,-5mm);
+\draw[->, red, thick] (t1.south) -- +(+5mm,-5mm);
+\draw[->, red, thick] (t2.south) -- +(-5mm,-5mm);
+\draw[->, blue, thick] (t3.south) -- +(0cm,-5mm);
+\draw[->, blue, thick] (t14.south) -- +(0cm,-5mm);
+\draw[->, blue, thick] (t15.south) -- +(0cm,-5mm);
+\draw[color=green!60!black] (5cm,35mm) node {Accès permuté par threads};
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+\begin{frame}{Accès non coalescent 1.0/1.1 : Lecture de floats}
+
+\begin{center}
+\begin{tikzpicture}
+\draw[xstep=5mm,ystep=0.25cm] (1.1cm,9.9mm) grid (3.9cm,12.51mm);
+\draw (3.9cm,9.9mm) -- (7.9cm,9.9mm) (3.9cm,12.5mm) -- (7.9cm,12.5mm);
+\draw[xstep=5mm,ystep=0.25cm] (7.9cm,9.9mm) grid (9.9cm,12.51mm);
+\draw (1.5cm,9.2mm) node{\tiny\bf 128}
+      (2.0cm,9.2mm) node{\tiny\bf 132}
+      (2.5cm,9.2mm) node{\tiny\bf 136}
+      (3.0cm,9.2mm) node{\tiny\bf 140}
+      (3.5cm,9.2mm) node{\tiny\bf 144}
+      (8.0cm,9.2mm) node{\tiny\bf 240}
+      (8.5cm,9.2mm) node{\tiny\bf 248}
+      (9.0cm,9.2mm) node{\tiny\bf 256};
+\draw (1.75cm,2cm) node (t0) {\tiny\bf $t_{0}$}
+      (2.75cm,2cm) node (t1) {\tiny\bf $t_{1}$}
+      (3.75cm,2cm) node (t2) {\tiny\bf $t_{2}$}
+      (8.25cm,2cm) node (t15) {\tiny\bf $t_{15}$};
+\draw[->, blue, thick] (t0.south) -- +(0mm,-5mm);
+\draw[->, blue, thick] (t1.south) -- +(0mm,-5mm);
+\draw[->, blue, thick] (t2.south) -- +(0mm,-5mm);
+\draw[->, blue, thick] (t15.south) -- +(0mm,-5mm);
+\draw[color=green!60!black] (5cm,5mm) node {Accès par pas de 2};
+
+\end{tikzpicture}
+
+16 transactions de 64 octets nécessaires !
+\end{center}
+\end{frame}
+
+\begin{frame}{Coalescence 1.2/1.3}
+
+\begin{itemize}
+\item Lectures simultanées par groupes de threads
+\item Régions continues de la mémoire globale
+  \begin{itemize}
+  \item \textcolor{orange}{32 octets} si tous les threads accèdent à des mots de 8 bits;
+  \item \textcolor{orange}{64 octets} si tous les threads accèdent à des mots de 16 bits;
+  \item \textcolor{orange}{128 octets} si tous les threads accèdent à des mots de 32 bits ou de
+    64 bits;
+  \end{itemize}
+\item Un nombre minimal de transactions alignées recouvrant toutes les adresses accédées est utilisé
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Accès coalescent 1.2/1.3 : Lecture de floats}
+
+\begin{center}
+\begin{tikzpicture}
+\draw[xstep=5mm,ystep=0.25cm] (1.1cm,9.9mm) grid (3.9cm,12.51mm);
+\draw (3.9cm,9.9mm) -- (7.9cm,9.9mm) (3.9cm,12.5mm) -- (7.9cm,12.5mm);
+\draw[xstep=5mm,ystep=0.25cm] (7.9cm,9.9mm) grid (9.9cm,12.51mm);
+\draw (1.5cm,9.2mm) node{\tiny\bf 128}
+      (2.0cm,9.2mm) node{\tiny\bf 132}
+      (2.5cm,9.2mm) node{\tiny\bf 136}
+      (3.0cm,9.2mm) node{\tiny\bf 140}
+      (3.5cm,9.2mm) node{\tiny\bf 144}
+      (8.0cm,9.2mm) node{\tiny\bf 184}
+      (8.5cm,9.2mm) node{\tiny\bf 188}
+      (9.0cm,9.2mm) node{\tiny\bf 192};
+\draw (1.75cm,2cm) node (t0) {\tiny\bf $t_{0}$}
+      (2.25cm,2cm) node (t1) {\tiny\bf $t_{1}$}
+      (2.75cm,2cm) node (t2) {\tiny\bf $t_{2}$}
+      (3.25cm,2cm) node (t3) {\tiny\bf $t_{3}$}
+      (8.25cm,2cm) node (t14) {\tiny\bf $t_{14}$}
+      (8.75cm,2cm) node (t15) {\tiny\bf $t_{15}$};
+\draw[->, blue, thick] (t0.south) -- +(0cm,-5mm);
+\draw[->, blue, thick] (t3.south) -- +(0cm,-5mm);
+\draw[->, blue, thick] (t14.south) -- +(0cm,-5mm);
+\draw[->, blue, thick] (t15.south) -- +(0cm,-5mm);
+\draw (2.25cm,1.6cm) node{\small\color{red}{X}};
+\draw (2.75cm,1.6cm) node{\small\color{red}{X}};
+\draw[color=green!60!black] (5cm,5mm) node {Plusieurs threads ne participent pas};
+
+\draw[xstep=5mm,ystep=0.25cm] (1.1cm,39.9mm) grid (3.9cm,42.51mm);
+\draw (3.9cm,39.9mm) -- (7.9cm,39.9mm) (3.9cm,42.5mm) -- (7.9cm,42.5mm);
+\draw[xstep=5mm,ystep=0.25cm] (7.9cm,39.9mm) grid (9.9cm,42.51mm);
+\draw (1.5cm,39.2mm) node{\tiny\bf 128}
+      (2.0cm,39.2mm) node{\tiny\bf 132}
+      (2.5cm,39.2mm) node{\tiny\bf 136}
+      (3.0cm,39.2mm) node{\tiny\bf 140}
+      (3.5cm,39.2mm) node{\tiny\bf 144}
+      (8.0cm,39.2mm) node{\tiny\bf 184}
+      (8.5cm,39.2mm) node{\tiny\bf 188}
+      (9.0cm,39.2mm) node{\tiny\bf 192};
+\draw (1.75cm,5cm) node (t0) {\tiny\bf $t_{0}$}
+      (2.25cm,5cm) node (t1) {\tiny\bf $t_{1}$}
+      (2.75cm,5cm) node (t2) {\tiny\bf $t_{2}$}
+      (3.25cm,5cm) node (t3) {\tiny\bf $t_{3}$}
+      (8.25cm,5cm) node (t14) {\tiny\bf $t_{14}$}
+      (8.75cm,5cm) node (t15) {\tiny\bf $t_{15}$};
+\draw[->, blue, thick] (t0.south) -- +(0cm,-5mm);
+\draw[->, blue, thick] (t1.south) -- +(0cm,-5mm);
+\draw[->, blue, thick] (t2.south) -- +(0cm,-5mm);
+\draw[->, blue, thick] (t3.south) -- +(0cm,-5mm);
+\draw[->, blue, thick] (t14.south) -- +(0cm,-5mm);
+\draw[->, blue, thick] (t15.south) -- +(0cm,-5mm);
+\draw[color=green!60!black] (5cm,35mm) node {Tous les threads participent};
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+\begin{frame}{Accès coalescent 1.2/1.3 : Lecture de floats}
+
+\begin{center}
+\begin{tikzpicture}
+\draw[xstep=5mm,ystep=0.25cm] (1.1cm,9.9mm) grid (3.9cm,12.51mm);
+\draw (3.9cm,9.9mm) -- (7.9cm,9.9mm) (3.9cm,12.5mm) -- (7.9cm,12.5mm);
+\draw[xstep=5mm,ystep=0.25cm] (7.9cm,9.9mm) grid (9.9cm,12.51mm);
+\draw (1.5cm,9.2mm) node{\tiny\bf 128}
+      (2.0cm,9.2mm) node{\tiny\bf \textcolor{red}{132}}
+      (2.5cm,9.2mm) node{\tiny\bf 136}
+      (3.0cm,9.2mm) node{\tiny\bf 140}
+      (3.5cm,9.2mm) node{\tiny\bf 144}
+      (8.0cm,9.2mm) node{\tiny\bf 184}
+      (8.5cm,9.2mm) node{\tiny\bf 188}
+      (9.0cm,9.2mm) node{\tiny\bf 192};
+\draw (1.75cm,2cm) node (t0) {\tiny\bf $t_{0}$}
+      (2.25cm,2cm) node (t1) {\tiny\bf $t_{1}$}
+      (2.75cm,2cm) node (t2) {\tiny\bf $t_{2}$}
+      (3.25cm,2cm) node (t3) {\tiny\bf $t_{3}$}
+      (8.25cm,2cm) node (t14) {\tiny\bf $t_{14}$}
+      (8.75cm,2cm) node (t15) {\tiny\bf $t_{15}$};
+\draw[->, blue, thick] (t0.south) -- +(5mm,-5mm);
+\draw[->, blue, thick] (t1.south) -- +(5mm,-5mm);
+\draw[->, blue, thick] (t2.south) -- +(5mm,-5mm);
+\draw[->, blue, thick] (t3.south) -- +(5mm,-5mm);
+\draw[->, blue, thick] (t14.south) -- +(5mm,-5mm);
+\draw[->, blue, thick] (t15.south) -- +(5mm,-5mm);
+\draw[color=green!60!black] (5cm,5mm) node {Adresse de début non alignée (pas un
+multiple de 64)};
+
+\draw[xstep=5mm,ystep=0.25cm] (1.1cm,39.9mm) grid (3.9cm,42.51mm);
+\draw (3.9cm,39.9mm) -- (7.9cm,39.9mm) (3.9cm,42.5mm) -- (7.9cm,42.5mm);
+\draw[xstep=5mm,ystep=0.25cm] (7.9cm,39.9mm) grid (9.9cm,42.51mm);
+\draw (1.5cm,39.2mm) node{\tiny\bf 128}
+      (2.0cm,39.2mm) node{\tiny\bf 132}
+      (2.5cm,39.2mm) node{\tiny\bf 136}
+      (3.0cm,39.2mm) node{\tiny\bf 140}
+      (3.5cm,39.2mm) node{\tiny\bf 144}
+      (8.0cm,39.2mm) node{\tiny\bf 184}
+      (8.5cm,39.2mm) node{\tiny\bf 188}
+      (9.0cm,39.2mm) node{\tiny\bf 192};
+\draw (1.75cm,5cm) node (t0) {\tiny\bf $t_{0}$}
+      (2.25cm,5cm) node (t1) {\tiny\bf $t_{1}$}
+      (2.75cm,5cm) node (t2) {\tiny\bf $t_{2}$}
+      (3.25cm,5cm) node (t3) {\tiny\bf $t_{3}$}
+      (8.25cm,5cm) node (t14) {\tiny\bf $t_{14}$}
+      (8.75cm,5cm) node (t15) {\tiny\bf $t_{15}$};
+\draw[->, blue, thick] (t0.south) -- +(0cm,-5mm);
+\draw[->, red, thick] (t1.south) -- +(+5mm,-5mm);
+\draw[->, red, thick] (t2.south) -- +(-5mm,-5mm);
+\draw[->, blue, thick] (t3.south) -- +(0cm,-5mm);
+\draw[->, blue, thick] (t14.south) -- +(0cm,-5mm);
+\draw[->, blue, thick] (t15.south) -- +(0cm,-5mm);
+\draw[color=green!60!black] (5cm,35mm) node {Permutation des accès par threads};
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+\begin{frame}{Accès non coalescents 1.2/1.3 : Lecture de floats}
+
+\begin{center}
+\begin{tikzpicture}
+\draw[xstep=5mm,ystep=0.25cm] (1.1cm,9.9mm) grid (3.9cm,12.51mm);
+\draw (3.9cm,9.9mm) -- (7.9cm,9.9mm) (3.9cm,12.5mm) -- (7.9cm,12.5mm);
+\draw[xstep=5mm,ystep=0.25cm] (7.9cm,9.9mm) grid (9.9cm,12.51mm);
+\draw (1.5cm,9.2mm) node{\tiny\bf 128}
+      (2.0cm,9.2mm) node{\tiny\bf 132}
+      (2.5cm,9.2mm) node{\tiny\bf 136}
+      (3.0cm,9.2mm) node{\tiny\bf 140}
+      (3.5cm,9.2mm) node{\tiny\bf 144}
+      (8.0cm,9.2mm) node{\tiny\bf 240}
+      (8.5cm,9.2mm) node{\tiny\bf 248}
+      (9.0cm,9.2mm) node{\tiny\bf 256};
+\draw (1.75cm,2cm) node (t0) {\tiny\bf $t_{0}$}
+      (2.75cm,2cm) node (t1) {\tiny\bf $t_{1}$}
+      (3.75cm,2cm) node (t2) {\tiny\bf $t_{2}$}
+      (8.25cm,2cm) node (t15) {\tiny\bf $t_{15}$};
+\draw[->, blue, thick] (t0.south) -- +(0mm,-5mm);
+\draw[->, blue, thick] (t1.south) -- +(0mm,-5mm);
+\draw[->, blue, thick] (t2.south) -- +(0mm,-5mm);
+\draw[->, blue, thick] (t15.south) -- +(0mm,-5mm);
+\draw[color=green!60!black] (5cm,5mm) node {Accès par pas de 2};
+
+\end{tikzpicture}
+
+Seulement une transaction de 128 octets nécessaire
+\end{center}
+\end{frame}
+
+\subsection{Mémoire : texture et mémoire constante}
+
+\begin{frame}{Texture et mémoire constante}
+
+\begin{itemize}
+\item La mémoire texture possède un cache
+  \begin{itemize}
+  \item Elle peut être  1D, 2D ou 3D
+  \item En lecture seulement \alert{mais}
+  \item Une texture 1D peut être associée à la mémoire globale
+    \begin{itemize}
+    \item Bénéficie du cache pour la lecture
+    \item Accès en écriture sur la mémoire globale
+    \end{itemize}
+  \end{itemize}
+\item La mémoire constante est en cache
+  \begin{itemize}
+  \item 4 cycles en lecture dans un simple demi-warp
+    \begin{itemize}
+    \item Le coût total est de 4 cycles si tous les threads d'un warp lisent la même adresse
+    \item Le coût total est de 64 cycles si tous les threads du warp lisent une adresse différente
+    \end{itemize}
+  \end{itemize}
+\end{itemize}
+\end{frame}
+
+\subsection{Mémoire partagée}
+
+\begin{frame}{Mémoire partagée}
+
+\begin{itemize}
+\item Des centaines de fois plus rapide que la mémoire globale
+  \begin{itemize}
+  \item 16 bancs peuvent être accèder simultanément sur
+    un hardware 1.X
+  \item 32 bancs peuvent être accédé simultanément sur un hardware 2.0
+  \item 32 octets consécutifs sont assignés à des bancs successifs
+  \end{itemize}
+\item Des Threads d'un même bloc peuvent coopérer via la mémoire partagée
+  \begin{itemize}
+  \item 16 KBytes maximum par multiprocesseur avec un hadware 1.X 
+  \item 48 KBytes maximum par multiprocesseur avec un hardware 2.0
+  \item Mais sur le hardware 2.0, la mémoire cache L1 est la même mémoire que
+    la mémoire partagée : le programmeur doit contrôler la taille de mémoire utilisée
+    par le cache L1 et la mémoire partagée.
+  \end{itemize}
+\item Permet d'éviter des accès non coalescent en mémoire globale  
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Mémoire partagée : problèmes de performance }
+
+\begin{itemize}
+\item Les cas idéaux :
+  \begin{itemize}
+  \item Si tous les threads d'un demi-warp (ou un warp pour le hardware 2.0)
+    accèdent à des bancs différents, pas de conflit de bancs
+  \item Si tous les threads d'un demi-warp (un warp en 2.0) lisent une adresse
+    identique, pas de conflit de bancs (broadcast)
+  \end{itemize}
+\item Les pires cas :
+  \begin{itemize}
+  \item Conflit de banc  : Plusieurs threads d'un même (1/2)-warp accèdent à un même banc
+  \item L'accès est sérialisé
+  \item Coût = max \# d'accès simultanés à un même banc
+  \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Accès à la mémoire partagée}
+
+\begin{minipage}[c]{3cm}
+\begin{tikzpicture}
+\draw[xstep=1cm,ystep=0.5cm] (0,0) grid (1cm,8cm);
+\draw[xstep=1cm,ystep=0.5cm] (1.99cm,0) grid (3cm,8cm);
+\foreach \b / \x in {0 / 0.25,1 / 0.75,2 / 1.25, 3/1.75, 4/2.25,
+  5/2.75, 6/3.25, 7/3.75, 8/4.25, 9/4.75, 10/5.25, 11/5.75,
+  12/6.25, 13/6.75, 14/7.25,15 / 7.75} {
+\draw (0.5cm,\x cm) node {\tiny Thread \b};
+\draw (2.5cm,\x cm) node {\tiny Bank   \b};
+\draw[thick, color=blue,->] (1cm, \x cm) -- (2cm, \x cm);
+}
+\end{tikzpicture}
+\end{minipage}
+\begin{minipage}[c]{4cm}
+\small
+\textbf{Motif d'accès sans conflits de bancs} :
+chaque thread du demi-warp accède à un banc différent.
+\end{minipage}
+\begin{minipage}[c]{3cm}
+\begin{tikzpicture}
+\draw[xstep=1cm,ystep=0.5cm] (0,0) grid (1cm,8cm);
+\draw[xstep=1cm,ystep=0.5cm] (1.99cm,0) grid (3cm,8cm);
+\foreach \b / \x in {0 / 0.25,1 / 0.75,2 / 1.25, 3/1.75, 4/2.25,
+  5/2.75, 6/3.25, 7/3.75, 8/4.25, 9/4.75, 10/5.25, 11/5.75,
+  12/6.25, 13/6.75, 14/7.25,15 / 7.75} {
+\draw (0.5cm,\x cm) node {\tiny Thread \b};
+\draw (2.5cm,\x cm) node {\tiny Bank   \b};
+}
+\foreach \b / \x in {0.25 / 1.25,0.75 / 0.25,1.25 / 2.75, 1.75/1.75, 2.25/2.25,
+  2.75/0.75, 3.25/3.25, 3.75/3.75, 4.25/5.75, 4.75/4.75, 5.25/5.25, 5.75/4.25,
+  6.25/6.25, 6.75/6.75, 7.25/7.25,7.75 / 7.75} {
+\draw[thick, color=blue,->] (1cm, \b cm) -- (2cm, \x cm);
+}
+\end{tikzpicture}
+\end{minipage}
+\end{frame}
+
+\begin{frame}{Accès mémoire partagée}
+
+\begin{minipage}[c]{3cm}
+\begin{tikzpicture}
+\draw[xstep=1cm,ystep=0.5cm] (0,0) grid (1cm,8cm);
+\draw[xstep=1cm,ystep=0.5cm] (1.99cm,0) grid (3cm,8cm);
+\foreach \b / \x in {0 / 0.25,1 / 0.75,2 / 1.25, 3/1.75, 4/2.25,
+  5/2.75, 6/3.25, 7/3.75, 8/4.25, 9/4.75, 10/5.25, 11/5.75,
+  12/6.25, 13/6.75, 14/7.25,15 / 7.75} {
+\draw (0.5cm,\x cm) node {\tiny Thread \b};
+\draw (2.5cm,\x cm) node {\tiny Bank   \b};
+\draw[thick, color=blue,->] (1cm, \x cm) -- (2cm, 4.75 cm);
+}
+\end{tikzpicture}
+\end{minipage}
+\begin{minipage}[c]{4cm}
+\small
+\begin{itemize}
+\item[$\leftarrow$] Chaque thread lit une adresse d'un même banc : pas de conflit
+  (broadcasting)
+\item[] Plusieurs Threads accèdent au même banc : \alert{conflit $\rightarrow$}
+\end{itemize}
+\end{minipage}
+\begin{minipage}[c]{3cm}
+\begin{tikzpicture}
+\draw[xstep=1cm,ystep=0.5cm] (0,0) grid (1cm,8cm);
+\draw[xstep=1cm,ystep=0.5cm] (1.99cm,0) grid (3cm,8cm);
+\foreach \b / \x in {0 / 0.25,1 / 0.75,2 / 1.25, 3/1.75, 4/2.25,
+  5/2.75, 6/3.25, 7/3.75, 8/4.25, 9/4.75, 10/5.25, 11/5.75,
+  12/6.25, 13/6.75, 14/7.25,15 / 7.75} {
+\draw (0.5cm,\x cm) node {\tiny Thread \b};
+\draw (2.5cm,\x cm) node {\tiny Bank   \b};
+}
+\foreach \b / \x in {0.25 / 1.25,0.75 / 0.25,1.25 / 1.75, 1.75/1.75, 2.25/2.25,
+  2.75/0.75, 3.25/3.25, 3.75/3.25, 4.25/3.25, 4.75/4.75, 5.25/5.25, 5.75/4.25,
+  6.25/6.25, 6.75/6.75, 7.25/7.25,7.75 / 7.75} {
+\draw[thick, color=red,->] (1cm, \b cm) -- (2cm, \x cm);
+}
+\end{tikzpicture}
+\end{minipage}
+\end{frame}
+
+\subsection{Exemple : Float3}
+
+\begin{frame}[containsverbatim]{Code float3 non coalescent}
+
+\begin{lstlisting}
+__global__ void accessFloat3(float3 *d_in, float3 *d_out)
+{
+  int index = blockIdx.x * blockDim.x + threadIdx.x;
+  float3 a = d_in[index];
+
+  a.x += 2; /* Red  */
+  a.y += 3; /* Green*/
+  a.z += 4; /* Blue */
+
+  d_out[index] = a;
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[containsverbatim]{accès non coalescent : cas de float3}
+
+\begin{itemize}
+\item float3 fait \textcolor{orange}{12} octets
+\item Chaque thread effectue  \textcolor{orange}{3} lectures
+  \begin{itemize}
+  \item \texttt{sizeof(float3) != 4, 8} ou \texttt{16};
+  \item Demi-warps lit trois régions non continues de 64 octets
+  \end{itemize}
+\end{itemize}
+
+\begin{center}
+\begin{tikzpicture}
+\draw[color=black] (-0.5cm,1cm) -- (5cm,1cm) (-0.5cm, 1.25cm) -- (5cm,1.25cm);
+\foreach \x in {0.,1.5,3.} {
+  \draw[color=black,fill=red] (\x cm, 1cm) rectangle +(0.5 cm, 0.25cm);
+}
+\foreach \x in {0.5,2.,3.5} {
+  \draw[color=black,fill=green] (\x cm,1cm) rectangle +(0.5cm, 0.25cm);
+}
+\foreach \x in {1.,2.5,4.} {
+  \draw[color=black,fill=blue] (\x cm,1cm) rectangle +(0.5cm, 0.25cm);
+}
+\node[color=black] at (0.25cm, 1.75cm) (t0) {\scriptsize $t_{0}$};
+\node[color=black] at (1.75cm, 1.75cm) (t1) {\scriptsize $t_{1}$};
+\node[color=black] at (3.25cm, 1.75cm) (t2) {\scriptsize $t_{2}$};
+\draw[->,thick] (t0) -- +(0cm,-0.5cm);
+\draw[->,thick] (t1) -- +(0cm,-0.5cm);
+\draw[->,thick] (t2) -- +(0cm,-0.5cm);
+\draw[<->,thick] (0.cm,0.75cm) -- node[below] {\scriptsize\texttt{float3}} 
+ +(1.5cm,0cm);
+\draw[<->,thick] (1.5cm,0.75cm) -- node[below] {\scriptsize\texttt{float3}} 
+ +(1.5cm,0cm);
+\draw[<->,thick] (3.0cm,0.75cm) -- node[below] {\scriptsize\texttt{float3}} 
+ +(1.5cm,0cm);
+\end{tikzpicture}
+
+Première lecture
+\end{center}
+\end{frame}
+
+\begin{frame}{accès non coalescent : cas de float3}
+
+\begin{center}
+\begin{tikzpicture}
+\draw[color=black] (-0.5cm,1cm) -- (9cm,1cm) (-0.5cm, 1.2cm) -- (9cm,1.2cm);
+\draw[color=black] (-0.5cm,3cm) -- (9cm,3cm) (-0.5cm, 3.2cm) -- (9cm,3.2cm);
+\draw[color=black] (-0.5cm,5cm) -- (9cm,5cm) (-0.5cm, 5.2cm) -- (9cm,5.2cm);
+
+\foreach \x in {0.,1.2,3.6,4.8,6.} {
+  \draw[color=black,fill=red] (\x cm, 1cm) rectangle +(0.4 cm, 0.2cm);
+  \draw[color=black,fill=red] (\x cm, 3cm) rectangle +(0.4 cm, 0.2cm);
+  \draw[color=black,fill=red] (\x cm, 5cm) rectangle +(0.4 cm, 0.2cm);
+}
+\foreach \x in {7.2,8.4} {
+  \draw[color=black,fill=red] (\x cm, 1cm) rectangle +(0.4 cm, 0.2cm);
+  \draw[color=black] (\x cm, 3cm) rectangle +(0.4 cm, 0.2cm);
+  \draw[color=black,fill=red] (\x cm, 5cm) rectangle +(0.4 cm, 0.2cm);
+}
+\foreach \x in {0.4,1.6,4.0,5.2} {
+  \draw[color=black,fill=green] (\x cm, 1cm) rectangle +(0.4 cm, 0.2cm);
+  \draw[color=black,fill=green] (\x cm, 3cm) rectangle +(0.4 cm, 0.2cm);
+  \draw[color=black,fill=green] (\x cm, 5cm) rectangle +(0.4 cm, 0.2cm);
+}
+\foreach \x in {6.4,7.6} {
+  \draw[color=black,fill=green] (\x cm, 1cm) rectangle +(0.4 cm, 0.2cm);
+  \draw[color=black] (\x cm, 3cm) rectangle +(0.4 cm, 0.2cm);
+  \draw[color=black,fill=green] (\x cm, 5cm) rectangle +(0.4 cm, 0.2cm);
+}
+\foreach \x in {0.8,2.0,4.4,5.6} {
+  \draw[color=black,fill=blue!30!white] (\x cm, 1cm) rectangle +(0.4 cm, 0.2cm);
+  \draw[color=black,fill=blue!30!white] (\x cm, 3cm) rectangle +(0.4 cm, 0.2cm);
+  \draw[color=black,fill=blue!30!white] (\x cm, 5cm) rectangle +(0.4 cm, 0.2cm);
+}
+\foreach \x in {6.8,8.0} {
+  \draw[color=black,fill=blue!30!white] (\x cm, 1cm) rectangle +(0.4 cm, 0.2cm);
+  \draw[color=black] (\x cm, 3cm) rectangle +(0.4 cm, 0.2cm);
+  \draw[color=black,fill=blue!30!white] (\x cm, 5cm) rectangle +(0.4 cm, 0.2cm);
+}
+\draw[->] (0.2cm,5cm) -- node[draw,fill=blue!30!white]{\scriptsize $t_{0}$} +(0cm,-1.8cm);
+\draw[->] (0.6cm,5cm) -- node[draw,fill=blue!30!white]{\scriptsize $t_{1}$} +(0cm,-1.8cm);
+\draw[->] (1.0cm,5cm) -- node[draw,fill=blue!30!white]{\scriptsize $t_{2}$}
++(0cm,-1.8cm);
+\draw[->] (6.2cm,5cm) -- node[draw,fill=blue!30!white]{\scriptsize $t_{255}$} +(0cm,-1.8cm);
+\draw[->] (6.6cm,5cm) -- node[draw,fill=blue!30!white,pos=0.75]{\scriptsize $t_{0}$} +(0cm,-3.8cm);
+\draw[->] (7.0cm,5cm) -- node[draw,fill=blue!30!white,pos=0.75]{\scriptsize $t_{1}$} +(0cm,-3.8cm);
+\draw[->] (7.4cm,5cm) -- node[draw,fill=blue!30!white,pos=0.75]{\scriptsize $t_{2}$}
++(0cm,-3.8cm);
+\draw[color=yellow!30!black, <->] (-0.3cm,1.1cm) --
+node[above,color=yellow!30!black,sloped]{\scriptsize Step 2} +(0cm,+2cm);
+\draw[color=yellow!30!black, <->] (-0.3cm,3.1cm) --
+node[above,color=yellow!30!black,sloped]{\scriptsize Step 1} +(0cm,+2cm);
+\end{tikzpicture}
+\end{center}
+
+De même, au troisième pas, on commence avec un offset de 512
+\end{frame}
+
+\begin{frame}{Accès coalescent : cas du float3}
+
+  \begin{itemize}
+  \item Utiliser de la mémoire partagée pour permettre la coalescence
+    \begin{itemize}
+    \item Besoin de \texttt{\bf sizeof(float3)*(threads/block)} octets de mémoire partagée
+    \item Chaque thread lit \textbf{3} scalaires réels :
+      \begin{itemize}
+      \item Offset : \textbf{0},\texttt{\bf (threads/block),2*(threads/block)}
+      \item Ceci pourrait être traité par d'autres threads, alors synchronisation
+      \end{itemize}
+    \end{itemize}
+  \item Calcul
+    \begin{itemize}
+    \item Chaque thread récupère son float3 de la mémoire partagée
+      \begin{itemize}
+      \item Convertir le pointeur sur la mémoire partégée en \texttt{(float3*)}
+      \item Utiliser l'ID du thread comme indice
+      \end{itemize}
+    \item Le reste du calcul ne change pas
+    \end{itemize}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[containsverbatim]{code float3 coalescent}
+
+\begin{lstlisting}
+__global__ void accessInt3Shared(float *g_in, float *g_out)
+{
+  // Read the input through Shared Memory
+  int index = blockIdx.x*blockDim.x + threadIdx.x;
+  __shared__ float s_data[256*3];
+  s_data[threadIdx.x]     = g_in[index    ];
+  s_data[threadIdx.x+256] = g_in[index+256];
+  s_data[threadIdx.x+512] = g_in[index+512];
+  __syncthreads();
+  float3 a = ((float3*)s_data)[threadIdx.x];
+  //Compute code is not changed
+  a.x += 2; // Red
+  a.y += 3; // Green
+  a.z += 4; // Blue
+  //Write the result through the shared memory
+  ((float3*)s_data)[threadIdx.x] = a;
+  __syncthreads();
+  g_out[index    ] = s_data[threadIdx.x    ];
+  g_out[index+256] = s_data[threadIdx.x+256];
+  g_out[index+512] = s_data[threadIdx.x+512];
+}
+\end{lstlisting}
+
+\end{frame}
+
+\subsection{Conditions et déroulement}
+
+\begin{frame}{Conditions et déroulement}
+
+  \begin{itemize}
+  \item \'Eviter les conditions dans le noyau
+    \begin{itemize}
+    \item Minimiser les branches divergentes pour éviter la sérialisation
+    \item \underline{Astuces} :
+      \begin{itemize}
+      \item Essayer de spécialiser le noyau suivant l'expression de la condition
+        (taille,\ldots)
+      \item Essayer de créer des masques
+      \end{itemize}
+    \end{itemize}
+  \item  \'Eviter les boucles dans les noyaux
+    \begin{itemize}
+    \item Essayer le déroulement de boucle à la main si la longueur de la boucle est connue
+    \item Utiliser la directive de compilation \texttt{\#pragma unroll} de nvcc
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\subsection{Taille des blocs}
+
+\begin{frame}{Optimiser le nombre de threads par bloc}
+
+  \begin{itemize}
+  \item Choisir les nombre de threads par bloc comme un multiple de la taille d'un warp
+    \begin{itemize}
+    \item Essayer d'éviter le gâchi de warp en sous effectifs
+    \end{itemize}
+  \item Plusieurs threads par bloc = meilleurs recouvrement de la lattence mémoire
+    \begin{itemize}
+    \item L'invocation de noyau peut se planter si trop de registres utilisés.
+    \end{itemize}
+  \item Heuristiques
+    \begin{itemize}
+    \item Minimum requis par le hardware : 64 Threads par bloc
+      \begin{itemize}
+      \item Seulement si beaucoup de blocs concurrents
+      \end{itemize}
+    \item 192 ou 256 threads est un meilleurs choix  : 
+      \begin{itemize}
+      \item Généralement assez de registre pour arriver à compiler et exécuter
+      \end{itemize}
+    \item Tout cela dépend de votre calcul, alors expérimentez !
+    \end{itemize}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Heuristique taille Grille/Bloc}
+
+  \begin{itemize}
+  \item \# de blocs $>$ \# de multiprocesseurs
+    \begin{itemize}
+    \item Pour que tous les multiprocesseurs aient au moins un bloc à exécuter
+    \end{itemize}
+  \item \# de blocs / \# de multiprocesseurs $>$ 2
+    \begin{itemize}
+    \item Plusieurs blocs peuvent être en concurrence dans un multiprocesseur
+    \item Les blocs qui n'attendent pas un  \texttt{\_\_syncthreads()} sont toujours actifs
+    \item Selon les resources valables -- registre, mémoire partagée
+    \end{itemize}
+  \item \# de blocs $>$ 100 pour s'adapter aux futurs hardware
+    \begin{itemize}
+    \item Blocs sont exécutés en pipeline sur un multiprocesseur
+    \item 1000 blocs par grille devrait s'adapter aux générations futures de GPU
+    \end{itemize}
+  \end{itemize}
+\end{frame}
+
+\subsection{Occupation}
+
+\begin{frame}{Occupation}
+
+  \begin{itemize}
+  \item Les instructions dans les threads sont exécutées simultanément, alors 
+    exécuter d'autres warps est le seul moyen de cacher les latences et de
+    garder le hardware occupé.
+  \item \textcolor{orange}{Occupation} = nombre de warps
+    s'exécutant en concurrence sur un multiprocesseur divisé
+    par le nombre maximal de warps qui peut être exécuté en concurrence.
+  \item Limité par l'utilisation des ressources :
+    \begin{itemize}
+    \item Registres
+    \item Mémoire partagée
+    \item threads/blocs
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Cas d'occupation}
+
+\begin{itemize} 
+\item \textcolor{green!60!black}{Hardware 1.0/1.1}
+  \begin{tabular}{c|c|c}\hline
+  768 threads : & 
+    \textcolor{green!60!black}{$3\times 256 (16\times 16)$} &
+    \textcolor{red}{$8\times 64$ (66\% utilisé)}\\
+  16 kBytes partagé &
+    \textcolor{green!60!black}{$3\times 5$}kbytes &
+    \textcolor{green!60!black}{$8\times 1.9$}kbytes \\
+  8192 registers &
+    \textcolor{green!60!black}{10 per thread} &
+    \textcolor{green!60!black}{15 per thread} \\
+  8 blocks & 
+    \textcolor{red}{3 blocks} &
+    \textcolor{green!60!black}{8 blocks} \\ \hline
+  \end{tabular}
+\item \textcolor{orange}{Hardware 1.2/1.3}
+  \begin{tabular}{c|c|c}\hline
+  1024 threads : & 
+    \textcolor{green!60!black}{$4\times 256 (16\times 16)$} &
+    \textcolor{red}{$8\times 64$ (50\% utilisé)}\\
+  16 kBytes partagé &
+    \textcolor{green!60!black}{$4\times 3.9$}kbytes &
+    \textcolor{green!60!black}{$8\times 1.9$}kbytes \\
+  16384 registers &
+    \textcolor{green!60!black}{15 per thread} &
+    \textcolor{green!60!black}{30 per thread} \\
+  8 blocks & 
+    \textcolor{red}{4 blocks} &
+    \textcolor{green!60!black}{8 blocks} \\ \hline
+  \end{tabular}
+\item \textcolor{red}{Hardware 2.0}
+  \begin{tabular}{c|c|c}\hline
+  1024 threads : & 
+    \textcolor{green!60!black}{$4\times 256 (16\times 16)$} &
+    \textcolor{red}{$8\times 64$ (50\% utilisé)}\\
+  32 kBytes partagé &
+    \textcolor{green!60!black}{$4\times 7.8$}kbytes &
+    \textcolor{green!60!black}{$8\times 3.8$}kbytes \\
+  32768 registers &
+    \textcolor{green!60!black}{30 per thread} &
+    \textcolor{green!60!black}{60 per thread} \\
+  8 blocks & 
+    \textcolor{red}{4 blocks} &
+    \textcolor{green!60!black}{8 blocks} \\ \hline
+  \end{tabular}\end{itemize}
+\end{frame}
+
+\begin{frame}[containsverbatim]{Déterminer l'utilisation des ressources}
+
+  \begin{itemize}
+  \item Utilisation de l'option \texttt{-ptxasoptions=-v} pour nvcc
+  \item Ou compiler le noyau avec l'option  \texttt{-cubin} pour 
+    déterminer l'utilisation des registres
+  \item Ouvrir le fichier \texttt{.cubin} avec votre éditeur préféré
+    et regarder la section code
+  \end{itemize}
+  
+  \begin{lstlisting}
+  architecture {sm_10}
+  abiversion   {0}
+  modname {cubin}
+  code {
+    name = BlackScholesGPU
+    lmem = 0
+    smem = 68
+    reg  = 20
+    bar  = 0
+    bincode {
+      0xa0004250 0x04200780 0x40024c09 0x00200780
+      ...
+  \end{lstlisting}
+\end{frame}
+
+\begin{frame}{Occupation $\neq$ performance}
+
+\begin{itemize}
+\item Augmenter l'occupation n'augmente pas nécessairement la performance \\
+  \begin{center}
+    {\Large MAIS}
+  \end{center}
+\item Les multiprocesseurs avec peu d'occupations ne peuvent pas cacher la latence
+  mémoire
+  \begin{itemize}
+  \item Tout cela se ramène au degré de parallélisme de votre application
+  \end{itemize}
+\end{itemize}
+\end{frame}
+
+\subsection{Outils de performance}
+
+\begin{frame}{Résumé du Hardware}
+
+\begin{itemize}
+\item Hardware 1.1 : 
+  \begin{itemize}
+    \item 32 bits atomics en mémoire globale
+    \end{itemize}
+\item Hardware 1.2 : 
+    \begin{itemize}
+    \item 32 bits atomics en mémoire partagée
+    \item 64 bits atomics en mémoire globale
+    \item Fonctions de vote pour les warps
+    \end{itemize}
+\item Hardware 1.3
+  \begin{itemize}
+  \item Double--precision floating points (IEEE compliant)
+    (CUDA 2.0)
+  \end{itemize}
+\item Hardware 2.0
+    \begin{itemize}
+    \item MIMD pour les blocs 
+    \item Cache L1
+    \item 32 bancs mémoire
+    \item Addition atomique pour floating point sur des mots 32 bits en mémoire globale et partagée;
+    \end{itemize}
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}{The profiler visuel CUDA}
+
+\begin{itemize}
+\item Aide à la mesure et trouve les problèmes potentiels
+  \begin{itemize}
+  \item Mesure de temps GPU et CPU pour toutes les invocations au noyau et les copies mémoire
+  \item Time stamps
+  \end{itemize}
+\item Accès aux compteurs de performance hardware
+\end{itemize}
+
+\begin{minipage}{48mm}
+\pgfuseimage{cudavisu1} 
+\end{minipage}
+\begin{minipage}{48mm}
+\pgfuseimage{cudavisu2} 
+\end{minipage}
+
+\end{frame}
+
+\begin{frame}{Interpreter les compteurs de profile}
+
+\begin{itemize}
+\item Les valeurs représentent les évenements au sein d'un warp
+\item Cible seulement un multi-processeur
+   \begin {itemize}
+   \item Les valeurs ne correspondent pas au nombre total de warps laché pour un noyau particuliers
+   \item Exécute assez de bloc pour s'assurer que le multiprocesseur cible obtienne un pourcentage consistent
+     de travail total.
+   \end{itemize}
+\item Les valeurs sont mieux utilisés pour identifier les performances relatives
+  entre un code optimisé et un code non optimisé.
+  \begin{itemize}
+  \item En d'autre mots, essayez de réduire le taux d'accès non coalescent, de branches divergentes, etc.
+  \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Signaux}
+
+\small
+Les évenements sont suivis par des compteurs hardwares à l'aide de signaux sur le hardware
+\begin{itemize}
+\item \textcolor{orange}{\tt timestamp}
+\begin{center}
+Accès mémoire global (lecture/écriture) coalescent ou non coalescent
+\end{center}
+\item \textcolor{orange}{\tt gld\_incoherent}, \textcolor{orange}{\tt gld\_coherent}
+\item \textcolor{orange}{\tt gst\_incoherent}, \textcolor{orange}{\tt gst\_coherent}
+\begin{center}
+Lecture/\'Ecriture local
+\end{center}
+\item \textcolor{orange}{\tt local\_load}, \textcolor{orange}{\tt local\_store}
+\begin{center}
+Nombre total de branches et de branches divergentes prises par les threads
+\end{center}
+\item \textcolor{orange}{\tt branch}, \textcolor{orange}{\tt divergent\_branch}
+\item \textcolor{orange}{\tt instructions} - compteur d'instruction
+\item \textcolor{orange}{\tt warp\_serialize} - Warps qui se sérialise sur des conflits d'adresse
+  pour la mémoire partagée ou constante
+\item \textcolor{orange}{\tt cta\_launched} - Blocs de threads exécutés
+\end{itemize}
+\end{frame}
+
+\section{Parallel CUDA : Efficient building of Parallel applications with
+  CUDA}
+
+\subsection{Different levels of parallelism  : from hardware to software}
+
+\begin{frame}{Compounded hardware}
+
+\begin{center}
+\begin{tikzpicture}
+\node[fill=blue!30!white,draw] at (-2cm,3cm) (sharmem1){\scriptsize Shared Memory};
+\node[fill=blue!30!white,draw] at (+2cm,3cm) (sharmem2){\scriptsize Shared Memory};
+
+\node[fill=orange!30!white,draw] at (-4.5cm,3cm) (gpumem11) {\scriptsize GPU memory};
+\node[fill=orange!30!white,draw] at (+4.5cm,3cm) (gpumem21){\scriptsize GPU memory};
+
+% GPU Device
+\node[fill=orange!20!white,draw,minimum width=15mm,minimum height=9mm] 
+  at (-4.5cm,1.5cm) (gpu11) {\phantom{a}};
+\node[fill=orange!30!white,draw,rotate=90,text width=8mm,minimum height=2mm,inner
+sep = 0pt] at (-5cm,1.5cm) (gpucard11){\tiny GPU 1};
+\draw (-4.91cm,1.09cm) grid[step=2mm] (-3.99cm,1.91cm);
+
+%GPU Device
+\node[fill=orange!20!white,draw,minimum width=15mm,minimum height=9mm] 
+  at (-4.5cm,-1.5cm) (gpu12) {\phantom{a}};
+\node[fill=orange!30!white,draw,rotate=90,text width=8mm,minimum height=2mm,inner
+sep = 0pt] at (-5cm,-1.5cm) (gpucard12){\tiny GPU 2};
+\draw (-4.91cm,-1.91cm) grid[step=2mm] (-3.99cm,-1.09cm);
+
+%bridge 
+\node[fill=orange!20!white,draw,minimum height=2mm, minimum width=2mm] at
+(-4.5cm, 0cm) (c0) {\phantom{a}}; 
+
+\node[fill=orange!30!white,draw] at (-4.5cm,-3cm) (gpumem12){\scriptsize GPU memory};
+\node[fill=orange!30!white,draw] at (+4.5cm,-3cm) (gpumem22){\scriptsize GPU memory};
+
+% Multicore 1 :
+\node[fill=blue!50!white, draw,minimum width=2cm,minimum height=1cm]
+at (-2cm,0cm) (p11) {};
+%\draw[fill=blue!50!white, draw] (-3cm,0.5cm) rectangle (-1cm,-0.5cm);
+\node[fill=blue!20!white, draw] at (-2.5cm,+0.25cm) (c11) {\tiny Core 1};
+\node[fill=blue!20!white, draw] at (-1.5cm,+0.25cm) (c12) {\tiny Core 2};
+\node[fill=blue!20!white, draw] at (-2.5cm,-0.25cm) (c13) {\tiny Core 3};
+\node[fill=blue!20!white, draw] at (-1.5cm,-0.25cm) (c14) {\tiny Core 4};
+
+% Internet :
+\node[fill=yellow!90!blue,draw,rounded corners,rotate=90,minimum width=4cm] at
+(0cm,0cm) (net) {\scriptsize Network};
+
+% Multicore 1 :
+\node[fill=blue!50!white, draw,minimum width=2cm,minimum height=1cm]
+at (+2cm,0cm) (p21) {};
+%\draw[fill=blue!50!white, draw] (+3cm,0.5cm) rectangle (+1cm,-0.5cm);
+\node[fill=blue!20!white, draw] at (+2.5cm,+0.25cm) (c11) {\tiny Core 1};
+\node[fill=blue!20!white, draw] at (+1.5cm,+0.25cm) (c12) {\tiny Core 2};
+\node[fill=blue!20!white, draw] at (+2.5cm,-0.25cm) (c13) {\tiny Core 3};
+\node[fill=blue!20!white, draw] at (+1.5cm,-0.25cm) (c14) {\tiny Core 4};
+
+% GPU Device
+\node[fill=orange!20!white,draw,minimum width=15mm,minimum height=9mm] 
+  at (+4.5cm,1.5cm) (gpu21) {\phantom{a}};
+\node[fill=orange!30!white,draw,rotate=90,text width=8mm,minimum height=2mm,inner
+sep = 0pt] at (+5cm,1.5cm) (gpucard21){\tiny GPU 1};
+%\draw[fill=orange!20!white] (+4.91cm,1.09cm) rectangle (+3.99cm,1.91cm);
+\draw (+3.99cm,1.09cm) grid[step=2mm] (+4.91cm,1.91cm);
+
+%GPU Device
+\node[fill=orange!20!white,draw,minimum width=15mm,minimum height=9mm] 
+  at (+4.5cm,-1.5cm) (gpu22) {\phantom{a}};
+\node[fill=orange!30!white,draw,rotate=90,text width=8mm,minimum height=2mm,inner
+sep = 0pt] at (+5cm,-1.5cm) (gpucard22){\tiny GPU 2};
+%\draw[fill=orange!20!white] (+4.91cm,-1.09cm) rectangle (+3.99cm,-1.91cm);
+\draw (+3.99cm,-1.91cm) grid[step=2mm] (+4.91cm,-1.09cm);
+% Bridge between GPU devices
+\node[fill=orange!20!white,draw,minimum height=2mm, minimum width=2mm] at
+(+4.5cm, 0cm) (c1) {\phantom{a}}; 
+
+% Links between devices
+\draw[<->,thick] (gpumem11) -- (gpu11);
+\draw[<->,thick] (gpumem12) -- (gpu12);
+\draw[<->,thick] (gpumem21) -- (gpu21);
+\draw[<->,thick] (gpumem22) -- (gpu22);
+\draw (gpucard11) -- (c0);
+\draw (gpucard12) -- (c0);
+\draw (gpucard21) -- (c1);
+\draw (gpucard22) -- (c1);
+\draw (p11) -- (c0);
+\draw (p21) -- (c1);
+\draw[<->,thick] (p11) -- (sharmem1);
+\draw[<->,thick] (p21) -- (sharmem2);
+\draw (p11) -- (net);
+\draw (p21) -- (net);
+\end{tikzpicture}
+\end{center}
+\end{frame}
+
+\begin{frame}{Compounded problem}
+
+  \begin{itemize}
+  \item Need to exploit all levels of parallelism
+    \begin{itemize}
+    \item Homogenous
+      \begin{itemize}
+      \item SMP machines
+      \item Clusters
+      \end{itemize}
+    \item Hetegogeneous
+      \begin{itemize}
+      \item Hardware accelerators
+      \item Possibly heterogeneous accelerators\ldots
+      \end{itemize}
+    \end{itemize}
+  \item Require combining multiple paradigms
+  \item Require combining multiple software solutions
+    \begin{itemize}
+    \item OpenMP+MPI, OpenMP+Cuda, MPI+Cuda, OpenMP+MPI+Cuda,\ldots
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Parallelism to software (1)}
+
+  \begin{itemize}
+  \item SMP machines
+    \begin{itemize}
+    \item Exploit shared memory
+      \begin{itemize}
+      \item OpenMP
+      \item Explicit pthreads or IPC
+      \item \ldots
+      \end{itemize}
+    \item Do not exploit shared memory
+      \begin{itemize}
+      \item MPI
+      \item Explicit networking code
+      \item \ldots
+      \end{itemize}
+    \end{itemize}
+  \item NUMA system or not ?
+  \item Decision is influenced by other  levels of parallelism
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Parallelism to software (2)}
+
+  \begin{itemize}
+  \item Clusters
+    \begin{itemize}
+    \item Do not exploit (non--existant) shared memory
+      \begin{itemize}
+      \item MPI
+      \item Explicit networking code
+      \item \ldots
+      \end{itemize}
+    \item Fake shared memory or SMP system
+      \begin{itemize}
+      \item Distributed Shared memory
+      \item Single--system image
+      \item Back to the SMP problems, only worse \ldots
+      \end{itemize}
+    \end{itemize}
+  \item Decision is again influenced by other levels of parallelism
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Parallelism to software (3)}
+
+  \begin{itemize}
+  \item Hardware accelerators 
+    \begin{itemize}
+    \item As many software solutions as hadware vendors, plus a few
+      extra from third--parties\ldots
+    \end{itemize}
+  \item Each solution has its own characteristics
+    \begin{itemize}
+    \item Thread--safe or not
+    \item Use multiple HWAs from a thread or not
+    \item Dynamically reprogrammable or not, or maybee too slow
+      to be usefully reprogrammable (FPGAs)
+    \item Support multiple HWAs or not\ldots
+    \item Support concurrent access to the HWA or not
+    \end{itemize}
+  \item Unfortunately, the choise is often made by the hardware\ldots
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Communication software (1)}
+
+\begin{center}
+\begin{tikzpicture}
+
+% GPU Device
+\node[fill=orange!20!white,draw,minimum width=15mm,minimum height=9mm] 
+  at (-4.5cm,1.5cm) (gpu11) {\phantom{a}};
+\node[fill=orange!30!white,draw,rotate=90,text width=8mm,minimum height=2mm,inner
+sep = 0pt] at (-5cm,1.5cm) (gpucard11){\tiny GPU 1};
+\draw (-4.91cm,1.09cm) grid[step=2mm] (-3.99cm,1.91cm);
+
+%GPU Device
+\node[fill=orange!20!white,draw,minimum width=15mm,minimum height=9mm] 
+  at (-4.5cm,-1.5cm) (gpu12) {\phantom{a}};
+\node[fill=orange!30!white,draw,rotate=90,text width=8mm,minimum height=2mm,inner
+sep = 0pt] at (-5cm,-1.5cm) (gpucard12){\tiny GPU 2};
+\draw (-4.91cm,-1.91cm) grid[step=2mm] (-3.99cm,-1.09cm);
+
+%bridge 
+\node[fill=orange!20!white,draw,minimum height=2mm, minimum width=2mm] at
+(-4.5cm, 0cm) (c0) {\phantom{a}}; 
+
+% Multicore 1 :
+\node[fill=blue!50!white, draw,minimum width=2cm,minimum height=1cm]
+at (-2cm,0cm) (p11) {};
+%\draw[fill=blue!50!white, draw] (-3cm,0.5cm) rectangle (-1cm,-0.5cm);
+\node[fill=blue!20!white, draw] at (-2.5cm,+0.25cm) (c11) {\tiny Core 1};
+\node[fill=blue!20!white, draw] at (-1.5cm,+0.25cm) (c12) {\tiny Core 2};
+\node[fill=blue!20!white, draw] at (-2.5cm,-0.25cm) (c13) {\tiny Core 3};
+\node[fill=blue!20!white, draw] at (-1.5cm,-0.25cm) (c14) {\tiny Core 4};
+
+% Internet :
+\node[fill=yellow!90!blue,draw,rounded corners,rotate=90,minimum width=4cm] at
+(0cm,0cm) (net) {\scriptsize Network};
+
+% Multicore 1 :
+\node[fill=blue!50!white, draw,minimum width=2cm,minimum height=1cm]
+at (+2cm,0cm) (p21) {};
+%\draw[fill=blue!50!white, draw] (+3cm,0.5cm) rectangle (+1cm,-0.5cm);
+\node[fill=blue!20!white, draw] at (+2.5cm,+0.25cm) (c21) {\tiny Core 1};
+\node[fill=blue!20!white, draw] at (+1.5cm,+0.25cm) (c22) {\tiny Core 2};
+\node[fill=blue!20!white, draw] at (+2.5cm,-0.25cm) (c23) {\tiny Core 3};
+\node[fill=blue!20!white, draw] at (+1.5cm,-0.25cm) (c24) {\tiny Core 4};
+
+% GPU Device
+\node[fill=orange!20!white,draw,minimum width=15mm,minimum height=9mm] 
+  at (+4.5cm,1.5cm) (gpu21) {\phantom{a}};
+\node[fill=orange!30!white,draw,rotate=90,text width=8mm,minimum height=2mm,inner
+sep = 0pt] at (+5cm,1.5cm) (gpucard21){\tiny GPU 1};
+%\draw[fill=orange!20!white] (+4.91cm,1.09cm) rectangle (+3.99cm,1.91cm);
+\draw (+3.99cm,1.09cm) grid[step=2mm] (+4.91cm,1.91cm);
+
+%GPU Device
+\node[fill=orange!20!white,draw,minimum width=15mm,minimum height=9mm] 
+  at (+4.5cm,-1.5cm) (gpu22) {\phantom{a}};
+\node[fill=orange!30!white,draw,rotate=90,text width=8mm,minimum height=2mm,inner
+sep = 0pt] at (+5cm,-1.5cm) (gpucard22){\tiny GPU 2};
+%\draw[fill=orange!20!white] (+4.91cm,-1.09cm) rectangle (+3.99cm,-1.91cm);
+\draw (+3.99cm,-1.91cm) grid[step=2mm] (+4.91cm,-1.09cm);
+% Bridge between GPU devices
+\node[fill=orange!20!white,draw,minimum height=2mm, minimum width=2mm] at
+(+4.5cm, 0cm) (c1) {\phantom{a}}; 
+
+% Links between devices
+\draw (gpucard11) -- (c0);
+\draw (gpucard12) -- (c0);
+\draw (gpucard21) -- (c1);
+\draw (gpucard22) -- (c1);
+\draw (p11) -- (c0);
+\draw (p21) -- (c1);
+\draw (p11) -- (net);
+\draw (p21) -- (net);
+\draw[thick,<->] (gpucard11) to[out=0,in=90] node[above]{ CUDA} (p11);
+\draw[thick,<->] (c13) to[out=-90,in=-90] node[below]{ OpenMP} (c14);
+\draw[thick,<->] (p11) to[out=-30,in=210] node[below]{ MPI} (p21);
+\draw[dashed,color=black!50!white,thick,<->] (gpucard12) to[out=0,in=-90] node[below]{A
+  dream !} (p21);
+\draw[dashed,color=black!50!white,thick,<->] (gpucard12) to[out=0,in=180] (gpucard22);
+\draw[dashed,color=black!70!white,thick,<->] (gpucard11) to[out=180,in=180]
+node[below,sloped]{Future version of Cuda ?} (gpucard12);
+\end{tikzpicture}
+\end{center}
+
+\end{frame}
+
+\begin{frame}{Performance}
+
+  \begin{itemize}
+  \item Communication is the performance killer
+    \begin{itemize}
+    \item Well--known problem in homogeneous HPC
+      \begin{itemize}
+      \item Vendor quotes MPI cross--section bandwidth, MPI latency,
+        and so forth
+      \end{itemize}
+    \item We have added an extra layer with CUDA
+    \end{itemize}
+  \item Need to minimize communication cost at global level
+    \begin{itemize}
+    \item High performance GPU may change usual trade--offs :
+      extra intra--GPU computation to avoid intra--node
+      or inter--node communication are often good
+    \end{itemize}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{CUDA contraints}
+
+  \begin{itemize}
+  \item CUDA has some limitations
+    \begin{itemize}
+    \item No more than one GPU per thread
+    \item Avoid more than one GPU per GPU
+    \item Multiple simultaneous accesses still hurt the performance
+      as of CUDA 1.1
+    \end{itemize}
+  \item CUDA allows multiple GPUs in one system, but\ldots
+    \begin{itemize}
+    \item GPU selection must be done by hand;
+    \item No way to communicate between multiple GPUs in
+      one system as of CUDA 1.1.
+    \end{itemize}
+  \end{itemize}
+\end{frame}
+
+\subsection{CUDA with OpenMP}
+
+\begin{frame}{CUDA with OpenMP}
+
+  \begin{itemize}
+  \item CUDA outside of parallel sections
+    \begin{itemize}
+    \item No particular problem : only the master thread will use
+      CUDA, behaving like non--openMP process;
+    \item Only one GPU will be exploitable from each process;
+    \item Memory ownership and transfers will basically be the
+      same than in non--OpenMP processes;
+    \end{itemize}
+  \item Also work for CUDA inside \texttt{single} section
+  \item Simple but not very powerful.
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[containsverbatim]{CUDA with OpenMP (2a)}
+
+\underline{CUDA inside non iterative parallel process section (1)}
+
+{\color{orange}
+  \begin{itemize}
+  \item Distinct CUDA code in different threads
+  \item Multiple GPUs at once is possible
+  \item Useful for simultaneous computations on distinct data
+  \item Similar in usefulness to programming threads, but easier
+    to manage and more portable
+  \end{itemize}
+}
+
+\begin{lstlisting}
+#pragma omp sections
+{
+#pragma omp section
+  structured block 1
+#pragma omp section
+  structured block 2
+...
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[containsverbatim]{CUDA and OpenMP (2b)}
+
+\underline{CUDA inside non iterative parallel section (2)}
+
+\begin{itemize}
+  \item Easy as long as the number of threads match the number of the GPUs
+    \begin{itemize}
+    \item Otherwise need to add extra synchronization to avoid GPU overcommit
+    \end{itemize}
+  \item Memory ownership and transfers are still not much more complicated
+    than in single threaded CUDA code
+\end{itemize}
+
+\begin{lstlisting}
+#pragma omp sections
+{
+#pragma omp section
+  structured block 1
+#pragma omp section
+  structured block 2
+...
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[containsverbatim]{CUDA and OpenMP (2c)}
+
+\begin{minipage}{4cm}
+\begin{itemize}
+\item As long as A and B are distinct, no communication required
+\item Asymetric execution may waste some time
+\end{itemize}
+\end{minipage}
+\begin{minipage}{59mm}
+\begin{center}
+\begin{tikzpicture}
+\draw[fill=cyan!80!black] (0.,5.) rectangle (3,8.5);
+\node at (1.,5.25) {\scriptsize GPU A};
+\node[fill=cyan,draw] at (1.5,8) (allocA) {\scriptsize Allocate A};
+\node[fill=orange!50!yellow,draw, below=2mm of allocA.south] (transfA)
+{\scriptsize Transf. input A};
+\node[fill=red!50!white,draw, below=2mm of transfA.south] (compA)
+{\scriptsize Compute A};
+\node[fill=red!50!cyan,draw, below=2mm of compA.south] (outA)
+{\scriptsize Trans. output A};
+
+\draw[fill=cyan!80!black] (3.2,5.) rectangle (6,8.5);
+\node[rotate=90] at (5.75,8) {\scriptsize GPU B};
+\node[fill=cyan,draw,minimum height=6mm] at (4.5,7.9) (allocB) {\scriptsize Allocate B};
+\node[fill=orange!50!yellow,draw, below=2mm of allocB.south,minimum height=6mm] (transfB)
+{\scriptsize Transf. input B};
+\node[fill=red!50!white,draw, below=2mm of transfB.south,minimum height=6mm] (compB)
+{\scriptsize Compute B};
+\node[fill=red!50!cyan,draw, below=2mm of compB.south,minimum height=6mm] (outB)
+{\scriptsize Trans. output B};
+
+\node at (3.0, 4) (nd3) {};
+\node[draw] at (3.0, 4.5) (nd2) {};
+\node[draw] at (3.0, 9) (nd1) {};
+\node at (3.0,10) (nd0) {};
+\draw (nd1) -- (nd0) (nd1) -- (allocA) (nd1) -- (allocB) (nd2) -- (nd3) (nd2)
+-- (outB) (nd2) -- (outA);
+\end{tikzpicture}
+\end{center}
+\end{minipage}
+\end{frame}
+
+\begin{frame}[containsverbatim]{CUDA and OpenMP (3a)}
+
+CUDA inside iterative parallel section (1)
+
+\begin{itemize}
+\item Identical CUDA code in different threads
+\item Multiple GPUs at once is possible
+\item Useful for doing a single computation accross
+  several GPUs
+\end{itemize}
+
+\begin{lstlisting}
+#pragma omp for
+for (...) {
+  structured block
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[containsverbatim]{CUDA and OpenMP (3b)}
+
+CUDA inside iterative loop section (2)
+\begin{itemize}
+\item Need to thoroughly think about data distribution, sharing,
+  transfer and synchronization\ldots
+\item Need to properly allocate GPUs
+  \begin{itemize}
+  \item The number of threads should match the number of GPUs
+    otherwise the synchronization requirements become overly complicated.
+  \end{itemize}
+\end{itemize}
+Not necessarily easier than directly programming threads
+\begin{itemize}
+\item Need a advanced understanding of OpenMP data sharing.
+\end{itemize}
+
+\begin{lstlisting}
+#pragma omp for
+for (...) {
+  structured block
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]{CUDA and OpenMP (3c)}
+\begin{minipage}{4cm}
+\begin{itemize}
+\item Data A is shared by both GPU, but each one works
+on a different subset;
+\item If OpenMP code includes \texttt{barrier} or
+  \texttt{single} directives, then Cuda Code may need
+  several kernels and extran transfers.
+\end{itemize}
+\end{minipage}
+\begin{minipage}{59mm}
+\begin{center}
+\begin{tikzpicture}
+\draw[fill=cyan!80!black] (0.,5.) rectangle (3,8.5);
+\node at (1.,5.25) {\scriptsize GPU A};
+\node[fill=cyan,draw] at (1.5,8) (allocA) {\scriptsize Allocate A};
+\node[fill=orange!50!yellow,draw, below=2mm of allocA.south] (transfA)
+{\scriptsize Transf. input A};
+\node[fill=red!50!white,draw, below=2mm of transfA.south] (compA)
+{\scriptsize Compute A};
+\node[fill=red!50!cyan,draw, below=2mm of compA.south] (outA)
+{\scriptsize Trans. output A};
+
+\draw[fill=cyan!80!black] (3.2,5.) rectangle (6,8.5);
+\node[rotate=90] at (5.75,8) {\scriptsize GPU B};
+\node[fill=cyan,draw] at (4.5,8) (allocB) {\scriptsize Allocate A};
+\node[fill=orange!50!yellow,draw, below=2mm of allocB.south] (transfB)
+{\scriptsize Transf. input A};
+\node[fill=red!50!white,draw, below=2mm of transfB.south] (compB)
+{\scriptsize Compute A};
+\node[fill=red!50!cyan,draw, below=2mm of compB.south] (outB)
+{\scriptsize Trans. output A};
+
+\node at (3.0, 4) (nd3) {};
+\node[draw] at (3.0, 4.5) (nd2) {};
+\node[draw] at (3.0, 9) (nd1) {};
+\node[right=1mm of nd1.east] {\scriptsize\texttt{\#pragma omp for}}; 
+\node at (3.0,10) (nd0) {};
+\draw (nd1) -- (nd0) (nd1) -- (allocA) (nd1) -- (allocB) (nd2) -- (nd3) (nd2)
+-- (outB) (nd2) -- (outA);
+\end{tikzpicture}
+\end{center}
+\end{minipage}
+\end{frame}
+
+\subsection{CUDA with MPI}
+
+\begin{frame}{CUDA and MPI (1)}
+
+\begin{itemize}
+\item Each MPI process includes single--threaded CUDA code;
+\item All communication are handled by MPI;
+\item If the MPI code already exists, then only adding MPI-safe
+  CUDA code is needed
+  \begin{itemize}
+  \item MPI--safe means making sure all MPI send read up-to-date data,
+    and all MPI receive are propagated back to the hardware accelerator.
+  \end{itemize}
+\item Essentially, the same problem than regular CUDA code, but with mode data
+  analysis required to ensure data coherency.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{CUDA and MPI (2)}
+
+Typical data behaviour :
+\begin{itemize}
+\item From main memory (System \# 0) to Hardware accelerator (HWA) memory (HWA
+  \# 0)
+\item Back from HWA \#0 memory to System \#0 memory;
+\item MPI transfer (through network) from main memory (System \# 0) to
+  main memory (System \# 1)
+\item From main memory (System \# 1) to HWA memory (HWA \# 1);
+\item Back from HWA \# 1 memory to System \# 1 memory
+\item \ldots and maybe back to System \# 0 through MPI\ldots
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}{CUDA and MPI (3)}
+
+The main concern is performance :
+\begin{itemize}
+\item Working prototype from MPI code is easy;
+\item Optimizing transfers isn't
+\end{itemize}
+
+Integrating CUDA inside MPI is easier than inside OpenMP
+\begin{itemize}
+\item CUDA is ``message passing'' between GPU and CPU
+\item Most of the data analysis has to be done for MPI anyway.
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile,containsverbatim]{Using multiple CUDA accelerators with MPI}
+
+  \begin{itemize}
+  \item 
+    \begin{minipage}[t]{60mm}
+      \# Cuda accelerators $>$ \# cores
+      \begin{itemize}
+      \item Multiple MPI processes per core (beware of CPU overload).
+      \end{itemize}
+    \end{minipage}
+    \begin{minipage}{35mm}
+      \begin{tikzpicture}
+        \node[draw,fill=cyan] at (0,0)   (gpu1) {\scriptsize GPU};
+        \node[draw,fill=cyan] at (0,0.5) (gpu2) {\scriptsize GPU};
+        \node[draw,fill=red!40!white] at (1,0.25) (cpu) {\scriptsize CPU};
+        \draw (gpu1) -- (cpu) (gpu2) -- (cpu);
+      \end{tikzpicture}
+    \end{minipage}
+  \item 
+    \begin{minipage}[t]{60mm}
+      \# Cuda accelerators $==$ \# cores
+      \begin{itemize}
+      \item The ideal case : generally one MPI process per core and GPU \\
+        $\rightarrow$ CPU may be idle while GPU is working        
+      \end{itemize}
+    \end{minipage}
+    \begin{minipage}{35mm}
+      \begin{tikzpicture}
+        \node[draw,fill=cyan] at (0,0)   (gpu1) {\scriptsize GPU};
+        \node[draw,fill=cyan] at (0,0.5) (gpu2) {\scriptsize GPU};
+        \node[draw,fill=red!40!white] at (1,0.5) (cpu1) {\scriptsize CPU};
+        \node[fill=red!40!white,draw, below=1mm of cpu1.south] (cpu2)
+        {\scriptsize CPU};
+        \draw (gpu1) -- (cpu2) (gpu2) -- (cpu1);
+      \end{tikzpicture}
+    \end{minipage}
+  \item 
+    \begin{minipage}[t]{60mm}
+    \# CUDA accelerators $<$ \# cores
+      \begin{itemize}
+      \item Share the GPUs ?
+      \item Lock the GPUs  ?
+      \item Load balancing CPU \& GPU ?
+      \end{itemize}
+    \end{minipage}
+    \begin{minipage}{35mm}
+      \begin{tikzpicture}
+        \node[draw,fill=cyan] at (0,0)   (gpu1) {\scriptsize GPU};
+        \node[draw,fill=cyan] at (0,0.5) (gpu2) {\scriptsize GPU};
+        \node[draw,fill=red!40!white] at (1,0.5) (cpu1) {\scriptsize CPU};
+        \node[fill=red!40!white,draw, below=1mm of cpu1.south] (cpu2) {\scriptsize CPU};
+        \node[fill=red!40!white,draw, right=1mm of cpu1.east] (cpu3) {\scriptsize CPU};
+        \node[fill=red!40!white,draw, right=1mm of cpu2.east] (cpu4) {\scriptsize CPU};
+        \draw (gpu1) -- (cpu2) (gpu2) -- (cpu1);
+      \end{tikzpicture}
+    \end{minipage}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Data centric approach (1)}
+
+  Data placement is the most important thing 
+  \begin{itemize}
+  \item Finding out where to put it to minimize transfer, i.e. maximize
+    resident data on HWAs, even if it means some redundancy (read--only data,
+    for instance);
+  \item How to cut it for easy parallelism and minimizing inter--threads 
+    inter--processes and inter--nodes communications;
+  \item Often, not using data where computations can do : pre--computed 
+    look--up tables are not necessarily a good idea on a GPU;
+  \item Sometimes, not distributing but duplicating computations : GPU are
+    good at computing, not at communicating.    
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Data centric approach (2)}
+
+Sometimes, reorganization of data and code is needed
+\begin{itemize}
+\item Large array of structures are not GPU--friendly, use structure of
+  arrays
+\item Array of pointers are not GPU--friendly (particulary irregulars ones),
+  use bi/multi--dimensional arrays
+\item \ldots
+\end{itemize}
+Computation placement is also important
+\begin{itemize}
+\item GPU--unfriendly computations should sometimes be done on the GPU
+  anyway, to keep data resident on the GPU.
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Data centric approach (3)}
+
+  For optimum results : think at the algorithm level, not  at the
+  \textsl{existing code} level
+  \begin{itemize}
+  \item Code optimized for single--threaded CPU
+  \item Code optimized for readability , maintenability
+  \item Code already optimized for other parallel paragdims :
+    SMP, cluster, vector machine
+  \item Code not really optimized for anything ;)
+  \end{itemize}
+\end{frame}
+
+\subsection{Everything at once}
+
+\begin{frame}[fragile]{Hardware reminder}
+
+\begin{center}
+\begin{tikzpicture}
+\node[fill=blue!30!white,draw] at (-2cm,3cm) (sharmem1){\scriptsize Shared Memory};
+\node[fill=blue!30!white,draw] at (+2cm,3cm) (sharmem2){\scriptsize Shared Memory};
+
+\node[fill=orange!30!white,draw] at (-4.5cm,3cm) (gpumem11) {\scriptsize GPU memory};
+\node[fill=orange!30!white,draw] at (+4.5cm,3cm) (gpumem21){\scriptsize GPU memory};
+
+% GPU Device
+\node[fill=orange!20!white,draw,minimum width=15mm,minimum height=9mm] 
+  at (-4.5cm,1.5cm) (gpu11) {\phantom{a}};
+\node[fill=orange!30!white,draw,rotate=90,text width=8mm,minimum height=2mm,inner
+sep = 0pt] at (-5cm,1.5cm) (gpucard11){\tiny GPU 1};
+\draw (-4.91cm,1.09cm) grid[step=2mm] (-3.99cm,1.91cm);
+
+%GPU Device
+\node[fill=orange!20!white,draw,minimum width=15mm,minimum height=9mm] 
+  at (-4.5cm,-1.5cm) (gpu12) {\phantom{a}};
+\node[fill=orange!30!white,draw,rotate=90,text width=8mm,minimum height=2mm,inner
+sep = 0pt] at (-5cm,-1.5cm) (gpucard12){\tiny GPU 2};
+\draw (-4.91cm,-1.91cm) grid[step=2mm] (-3.99cm,-1.09cm);
+
+%bridge 
+\node[fill=orange!20!white,draw,minimum height=2mm, minimum width=2mm] at
+(-4.5cm, 0cm) (c0) {\phantom{a}}; 
+
+\node[fill=orange!30!white,draw] at (-4.5cm,-3cm) (gpumem12){\scriptsize GPU memory};
+\node[fill=orange!30!white,draw] at (+4.5cm,-3cm) (gpumem22){\scriptsize GPU memory};
+
+% Multicore 1 :
+\node[fill=blue!50!white, draw,minimum width=2cm,minimum height=1cm]
+at (-2cm,0cm) (p11) {};
+%\draw[fill=blue!50!white, draw] (-3cm,0.5cm) rectangle (-1cm,-0.5cm);
+\node[fill=blue!20!white, draw] at (-2.5cm,+0.25cm) (c11) {\tiny Core 1};
+\node[fill=blue!20!white, draw] at (-1.5cm,+0.25cm) (c12) {\tiny Core 2};
+\node[fill=blue!20!white, draw] at (-2.5cm,-0.25cm) (c13) {\tiny Core 3};
+\node[fill=blue!20!white, draw] at (-1.5cm,-0.25cm) (c14) {\tiny Core 4};
+
+% Internet :
+\node[fill=yellow!90!blue,draw,rounded corners,rotate=90,minimum width=4cm] at
+(0cm,0cm) (net) {\scriptsize Network};
+
+% Multicore 1 :
+\node[fill=blue!50!white, draw,minimum width=2cm,minimum height=1cm]
+at (+2cm,0cm) (p21) {};
+%\draw[fill=blue!50!white, draw] (+3cm,0.5cm) rectangle (+1cm,-0.5cm);
+\node[fill=blue!20!white, draw] at (+2.5cm,+0.25cm) (c11) {\tiny Core 1};
+\node[fill=blue!20!white, draw] at (+1.5cm,+0.25cm) (c12) {\tiny Core 2};
+\node[fill=blue!20!white, draw] at (+2.5cm,-0.25cm) (c13) {\tiny Core 3};
+\node[fill=blue!20!white, draw] at (+1.5cm,-0.25cm) (c14) {\tiny Core 4};
+
+% GPU Device
+\node[fill=orange!20!white,draw,minimum width=15mm,minimum height=9mm] 
+  at (+4.5cm,1.5cm) (gpu21) {\phantom{a}};
+\node[fill=orange!30!white,draw,rotate=90,text width=8mm,minimum height=2mm,inner
+sep = 0pt] at (+5cm,1.5cm) (gpucard21){\tiny GPU 1};
+%\draw[fill=orange!20!white] (+4.91cm,1.09cm) rectangle (+3.99cm,1.91cm);
+\draw (+3.99cm,1.09cm) grid[step=2mm] (+4.91cm,1.91cm);
+
+%GPU Device
+\node[fill=orange!20!white,draw,minimum width=15mm,minimum height=9mm] 
+  at (+4.5cm,-1.5cm) (gpu22) {\phantom{a}};
+\node[fill=orange!30!white,draw,rotate=90,text width=8mm,minimum height=2mm,inner
+sep = 0pt] at (+5cm,-1.5cm) (gpucard22){\tiny GPU 2};
+%\draw[fill=orange!20!white] (+4.91cm,-1.09cm) rectangle (+3.99cm,-1.91cm);
+\draw (+3.99cm,-1.91cm) grid[step=2mm] (+4.91cm,-1.09cm);
+% Bridge between GPU devices
+\node[fill=orange!20!white,draw,minimum height=2mm, minimum width=2mm] at
+(+4.5cm, 0cm) (c1) {\phantom{a}}; 
+
+% Links between devices
+\draw[<->,thick] (gpumem11) -- (gpu11);
+\draw[<->,thick] (gpumem12) -- (gpu12);
+\draw[<->,thick] (gpumem21) -- (gpu21);
+\draw[<->,thick] (gpumem22) -- (gpu22);
+\draw (gpucard11) -- (c0);
+\draw (gpucard12) -- (c0);
+\draw (gpucard21) -- (c1);
+\draw (gpucard22) -- (c1);
+\draw (p11) -- (c0);
+\draw (p21) -- (c1);
+\draw[<->,thick] (p11) -- (sharmem1);
+\draw[<->,thick] (p21) -- (sharmem2);
+\draw (p11) -- (net);
+\draw (p21) -- (net);
+\end{tikzpicture}
+\end{center}
+
+\end{frame}
+
+\begin{frame}{Everything at once}
+
+It's possible to exploit all levels of parallelism at once :
+\begin{itemize}
+\item MPI (shared memory + networking) and CUDA 
+  \begin{itemize}
+  \item If MPI library supports it\ldots
+  \end{itemize}
+\item OpenMP and CUDA on a distributed shared memory system
+  \begin{itemize}
+  \item Performance may be atrocious if there's a lot of data sharing.
+  \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Everything at once (2)}
+  
+  MPI + OpenMP + CUDA
+  \begin{itemize}
+    \item The idea : use the dedicated, optimal tool at each level
+  \end{itemize}
+
+  Probably not a good idea for very large, regular problems 
+  with low communications overhead
+  \begin{itemize}
+  \item Drop OpenMP and use only MPI
+  \item Simpler is often better
+  \item Amdahl's law !
+  \end{itemize}
+
+\end{frame}
+
+\begin{frame}{Everything at once (3)}
+
+  Probably not a good idea for small (in terms of
+  memory size), compute--intensive problems than can
+  fit in a single machine with 2 or 4 GPUs :
+  \begin{itemize}
+  \item Drop MPI and use only OpenMP
+    \begin{itemize}
+    \item In particular, if the code is already OpenMP--aware
+    \end{itemize}
+  \item Drop OpenMP and use only MPI :
+    \begin{itemize}
+    \item Again, for code with low communications overhead
+    \item Easier to scale to cluster in the future
+    \item MPI more ``difficult'' than OpenMP, but easier to integrate
+      with CUDA
+    \end{itemize}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Everything at once (4)}
+  
+  Easier for code that compute large, disjoint problems
+  simultaneously:
+  \begin{itemize}
+  \item Use MPI to distribute each problem on the nodes
+  \item Use OpenMP noniterative parallel sections to compute
+    one slice of each problem simultaneously
+  \end{itemize}
+\end{frame}
+
+\subsection{Conclusion}
+
+\begin{frame}{Conclusion}
+
+  \begin{itemize}
+  \item Use the appropriate tool for the job
+  \item Go back to the underlying problem or algorithm, existing code
+    has already lost some information
+  \item Mixing and matching parallel tools is possible but a lot trickier
+    than using just one
+  \item Unless the problem demands otherwise, it's easier to use MPI+CUDA
+    than OpenMP + Cuda
+  \item Third--party tools may help
+  \item Think about load balacing with clusters
+  \end{itemize}
+\end{frame}
+
+
+\end{document}
