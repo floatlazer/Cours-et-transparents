@@ -35,7 +35,7 @@
 
 \title[Calculateurs parallèles à mémoire partagée\hspace{2em}]{Calculateurs à mémoire partagée}
 \author[Xavier JUVIGNY]{Xavier JUVIGNY}
-\date{7 Février 2017}
+\date{\today}
 
 \institute{ONERA}
 
@@ -44,10 +44,11 @@
 \lstset{%
   basicstyle=\scriptsize,
   frame=single,
-  keywordstyle=\color{blue},
+  keywordstyle=\scriptsize\color{blue},
   language=C++,
-  commentstyle=\color{red},
-  stringstyle=\color{brown},
+  xleftmargin=\parindent,
+  commentstyle=\tiny\ttfamily\color{red},
+  stringstyle=\scriptsize\color{brown},
   keepspaces=true,
   showspaces=false,
   tabsize=2
@@ -611,13 +612,13 @@ int main(int argc, const char** argv) {
   for (unsigned i = 0; i < num_cpus; ++i) {// Lambda function for thread
     threads[i] = std::thread([&iomutex, i] ()  {
       {
-        // std::lock_guard permet de bloquer un mutex pendant la durée d'un bloc
-        // d'instruction. Ici cela permet de bloquer le mutex uniquement durant
-        // l'affichage à l'iade de std::cout
+// std::lock_guard permet de bloquer un mutex pendant la durée d'un bloc
+// d'instruction. Ici cela permet de bloquer le mutex uniquement durant
+// l'affichage à l'aide de std::cout
         std::lock_guard<std::mutex> iolock(iomutex);
         std::cout << "Thread #" << i << " is running\n";
       }
-      // On simule un travail important en mettant le thread un peu en pause
+// On simule un travail important en mettant le thread un peu en pause
       std::this_thread::sleep_for(std::chrono::milliseconds(200));
     });
   }
